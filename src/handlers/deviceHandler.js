@@ -2,6 +2,7 @@ const axios = require('axios');
 const { log, EVENT_TYPES } = require('../logger');
 const moment = require('moment');
 const schedule = require('node-schedule');
+const localStorage = require('localStorage');
 
 const devices = [
   // {
