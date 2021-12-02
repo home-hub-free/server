@@ -6,7 +6,8 @@ const {
   triggerDevice,
   devices,
   setDailyEvents,
-  getDailyEvents 
+  getDailyEvents,
+  getDevices
 } = require('./handlers/deviceHandler');
 
 const { log, EVENT_TYPE } = require('./logger');
@@ -48,4 +49,8 @@ app.get('/manual-trigger', (request, response) => {
 
 app.get('/get-daily-events', (request, response) => {
   response.send(getDailyEvents());
+});
+
+app.get('/get-devices', (request, response) => {
+  response.send(getDevices());
 });

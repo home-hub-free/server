@@ -26,18 +26,9 @@ function updateRoomState(room, value) {
   }
 
   let roomState = activeStates[room]
-  // let restarted = false;
   // This room is now active
   roomState.state = true;
   // Check if a timer already exists
-  // if (roomState.timer) {
-  //   // If exists we clear it to restart it
-  //   clearTimeout(roomState.timer);
-  //   // restarted = true;
-  // } else {
-  //   log(EVENT_TYPES.room_active, [room]);
-  // }
-
   roomState.timer ? clearTimeout(roomState.timer) : log(EVENT_TYPES.room_active, [room]);
   checkTriggers(roomState, value);
 
@@ -48,10 +39,6 @@ function updateRoomState(room, value) {
     log(EVENT_TYPES.room_innactive, [room]);
     checkTriggers(roomState, false);
   }, TIMER);
-
-  // if (restarted) {
-  //   log(EVENT_TYPES.timer_reset, [room]);
-  // }
 }
 
 function checkTriggers(roomState, value) {

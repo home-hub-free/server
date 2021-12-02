@@ -4,13 +4,13 @@ const moment = require('moment');
 const schedule = require('node-schedule');
 
 const devices = [
-  {
-    id: 1,
-    name: 'test empty device nodemcu', 
-    type: 'boolean',
-    value: false,
-    ip: null,
-  },
+  // {
+  //   id: 1,
+  //   name: 'test empty device nodemcu', 
+  //   type: 'boolean',
+  //   value: false,
+  //   ip: null,
+  // },
   {
     id: 2,
     name: 'Kitchen upper lights',
@@ -49,6 +49,8 @@ function assignDeviceIpAddress(deviceId, address) {
     device.ip = ip;
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
+
+  assignDeviceValue(device);
 }
 
 function triggerDevice(device, value, force) {
@@ -75,6 +77,7 @@ function setValueDevice(device, value) {
     axios.get('http://' + device.ip + '/set?value=' + value)
       .then(() => {
         device.value = value;
+        storeDeviceValue(device);
       })
       .catch(() => {
         console.log(error.message);
@@ -87,6 +90,7 @@ function triggerBooleanDevice(device, value) {
     axios.get('http://' + device.ip + '/toggle?value=' + value)
       .then(() => {
         device.value = value;
+        storeDeviceValue(device);
       })
       .catch((error) => {
         console.log(error.message);
@@ -153,9 +157,29 @@ function isPastSunSet() {
   return sunset.getTime() < (new Date()).getTime();
 }
 
+function getDevices() {
+  return Object.values(devices).map((device) => {
+    return {
+      id: device.id,
+      name: device.name,
+      value: device.value
+    };
+  });
+}
+
+function storeDeviceValue(device) {
+  localStorage.setItem(device.id, JSON.stringify(device.value));
+}
+
+function assignDeviceValue(device) {
+  let value = JSON.parse(localStorage.getItem(device.id));
+  if (value) device.value = value;
+}
+
 exports.setDailyEvents = setDailyEvents;
 exports.getDailyEvents = getDailyEvents;
 exports.assignDeviceIpAddress = assignDeviceIpAddress;
 exports.triggerDevice = triggerDevice;
+exports.getDevices = getDevices;
 exports.dailyEvents = dailyEvents;
 exports.devices = devices;
