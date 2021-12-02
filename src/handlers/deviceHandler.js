@@ -32,7 +32,6 @@ const devices = [
     name: 'Rightside livingroom blind',
     type: 'value',
     value: 0,
-    triggerCondition: () => true,
     ip: null
   }
 ];
@@ -54,9 +53,12 @@ function assignDeviceIpAddress(deviceId, address) {
 
 function triggerDevice(device, value, force) {
   // Check for trigger conditions on the device before triggering
-  if (device.triggerCondition && !device.triggerCondition(value)) {
+  if (device.triggerCondition && !device.triggerCondition(value) && !force) {
     return;
   }
+
+  // Avoid trigger overall if the value is still the same, this to save server requests
+  if (String(value) === String(device.value)) return;
 
   switch (device.type) {
     case 'boolean':

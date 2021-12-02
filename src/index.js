@@ -40,7 +40,7 @@ app.post('/add-device-ip', (request, response) => {
 app.get('/manual-trigger', (request, response) => {
   if (request.query.device && request.query.value) {
     let device = devices.find(device =>  device.id == request.query.device);
-    if (device) triggerDevice(device, request.query.value);
+    if (device) triggerDevice(device, request.query.value, true);
   }
 
   response.send(true);
