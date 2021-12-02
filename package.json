@@ -1,0 +1,18 @@
+{
+  "name": "homer-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Damuz",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.24.0",
+    "express": "^4.17.1",
+    "moment": "^2.29.1",
+    "node-schedule": "^2.1.0"
+  }
+}
