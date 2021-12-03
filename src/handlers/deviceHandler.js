@@ -2,16 +2,28 @@ const axios = require('axios');
 const { log, EVENT_TYPES } = require('../logger');
 const moment = require('moment');
 const schedule = require('node-schedule');
-const localStorage = require('localStorage');
+const storage = require('node-persist');
+storage.init({
+  dir: './data',
+
+  stringify: JSON.stringify,
+
+  parse: JSON.parse,
+
+  encoding: 'utf8',
+
+  logging: false,  // can also be custom logging function
+
+  ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
+
+  expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
+
+  // in some cases, you (or some other service) might add non-valid storage files to your
+  // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
+  forgiveParseErrors: false
+});
 
 const devices = [
-  // {
-  //   id: 1,
-  //   name: 'test empty device nodemcu', 
-  //   type: 'boolean',
-  //   value: false,
-  //   ip: null,
-  // },
   {
     id: 2,
     name: 'Kitchen upper lights',
@@ -21,6 +33,7 @@ const devices = [
       let blinds = devices.find((device) => device.id === 3);
       let blindsClosed = parseInt(blinds.value) === 0;
       value = value === 'true';
+      // Only do this validations if we are trying to turn the lights on
       if (value) {
         return (isPastSunSet() || blindsClosed);
       }
@@ -169,12 +182,22 @@ function getDevices() {
 }
 
 function storeDeviceValue(device) {
-  localStorage.setItem(device.id, JSON.stringify(device.value));
+  let id = JSON.stringify(device.id);
+  let newValue = JSON.stringify(device.value);
+  storage.getItem(id).then(value => {
+    let args = [id, newValue];
+    let fn = value ? 'updateItem' : 'setItem';
+    storage[fn].apply(null, args); 
+  });
 }
 
 function assignDeviceValue(device) {
-  let value = JSON.parse(localStorage.getItem(device.id));
-  if (value) device.value = value;
+  let id = JSON.stringify(device.id);
+  storage.getItem(id).then(value => {
+    if (value) device.value = JSON.parse(value);
+
+    log(EVENT_TYPES.init_value, [id, value]);
+  });
 }
 
 exports.setDailyEvents = setDailyEvents;

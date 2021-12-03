@@ -8,7 +8,8 @@ const EVENT_TYPES = {
   ping: '[PING]',
   room_active: '[ROOM ACTIVE]',
   room_innactive: '[ROOM_INNACTIVE]',
-  timer_reset: '[TIMER RESET]'
+  timer_reset: '[TIMER RESET]',
+  init_value: '[INIT VALUE]'
 }
 
 // Used just to make sure we log 100% text and not objects
