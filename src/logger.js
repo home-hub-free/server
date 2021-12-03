@@ -9,7 +9,8 @@ const EVENT_TYPES = {
   room_active: '[ROOM ACTIVE]',
   room_innactive: '[ROOM_INNACTIVE]',
   timer_reset: '[TIMER RESET]',
-  init_value: '[INIT VALUE]'
+  init_value: '[INIT VALUE]',
+  error: '[ERROR]'
 }
 
 // Used just to make sure we log 100% text and not objects

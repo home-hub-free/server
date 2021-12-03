@@ -18,6 +18,11 @@ const PORT = 8080;
 setDailyEvents();
 
 app.use(express.json());
+// app.use((request, response, next) => {
+//   response.header("Access-Control-Allow-Origin", "*");
+//   response.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+//   next();
+// })
 
 app.listen(PORT, () => {
   console.log('App working at: ', PORT);

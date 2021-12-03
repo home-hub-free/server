@@ -144,6 +144,9 @@ function setDailyEvents() {
         setEvent('open-blinds', 'Opens living room blinds', sunrise, () => triggerDevice(devices[2], '100'));
         setEvent('close-blinds', 'Closes livingroom blinds', sunset, () => triggerDevice(devices[1], '0'));
       }
+    })
+    .catch(err => {
+      log(EVENT_TYPES.error, [err]);
     });
 }
 
@@ -176,7 +179,8 @@ function getDevices() {
     return {
       id: device.id,
       name: device.name,
-      value: device.value
+      value: device.value,
+      type: device.type
     };
   });
 }
