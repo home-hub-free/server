@@ -57,6 +57,7 @@ function assignDeviceIpAddress(deviceId, address) {
   if (device && !device.ip) {
     device.ip = ip;
     log(EVENT_TYPES.device_detected, [deviceId, ip]);
+    assignDeviceValue(device);
   }
 
   if (device.ip !== ip) {
@@ -64,7 +65,6 @@ function assignDeviceIpAddress(deviceId, address) {
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
 
-  assignDeviceValue(device);
 }
 
 function triggerDevice(device, value, force) {
