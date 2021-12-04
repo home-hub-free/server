@@ -2,7 +2,7 @@ const { updateRoomState, ROOMS } = require('./roomHandler');
 
 const sensors = [
   {
-    id: 1,
+    id: 3,
     type: 'boolean',
     value: false,
     rooms: [ROOMS.KITCHEN]
