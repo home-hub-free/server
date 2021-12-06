@@ -69,7 +69,7 @@ function assignDeviceIpAddress(deviceId, address) {
 
 function triggerDevice(device, value, force) {
   // Check for trigger conditions on the device before triggering
-  if (device.triggerCondition && !device.triggerCondition(value) && !force) {
+  if (!device || (device.triggerCondition && !device.triggerCondition(value) && !force)) {
     return;
   }
 
@@ -138,11 +138,14 @@ function setDailyEvents() {
     .then((result) => {
       if (result && result.data && result.data.location && result.data.location.time && result.data.location.time.length > 0) {
         let dayData = result.data.location.time[0];
+        let blinds = devices[1];
         sunrise = new Date(dayData.sunrise.time);
-        sunset = new Date(dayData.sunset.time);  
-
-        setEvent('open-blinds', 'Opens living room blinds', sunrise, () => triggerDevice(devices[2], '100'));
-        setEvent('close-blinds', 'Closes livingroom blinds', sunset, () => triggerDevice(devices[1], '0'));
+        sunset = new Date(dayData.sunset.time);
+        
+        if (blinds) {
+          setEvent('open-blinds', 'Opens living room blinds', sunrise, () => triggerDevice(blinds, '100'));
+          setEvent('close-blinds', 'Closes livingroom blinds', sunset, () => triggerDevice(blinds, '0'));
+        }
       }
     })
     .catch(err => {
@@ -172,6 +175,14 @@ function getDailyEvents() {
 
 function isPastSunSet() {
   return sunset.getTime() < (new Date()).getTime();
+}
+
+function removeTimeFromDate(date, time) {
+  return new Date(date.getTime() - time);
+}
+
+function addTimeToDate(date, time) {
+  return new Date(date.getTime() + time);
 }
 
 function getDevices() {
@@ -209,5 +220,6 @@ exports.getDailyEvents = getDailyEvents;
 exports.assignDeviceIpAddress = assignDeviceIpAddress;
 exports.triggerDevice = triggerDevice;
 exports.getDevices = getDevices;
+exports.setEvent = setEvent;
 exports.dailyEvents = dailyEvents;
 exports.devices = devices;

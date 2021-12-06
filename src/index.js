@@ -7,10 +7,11 @@ const {
   devices,
   setDailyEvents,
   getDailyEvents,
+  setEvent,
   getDevices
 } = require('./handlers/deviceHandler');
 
-const { log, EVENT_TYPE } = require('./logger');
+const { log, EVENT_TYPES } = require('./logger');
 
 const app = express();
 const PORT = 8080;
@@ -18,11 +19,6 @@ const PORT = 8080;
 setDailyEvents();
 
 app.use(express.json());
-// app.use((request, response, next) => {
-//   response.header("Access-Control-Allow-Origin", "*");
-//   response.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-//   next();
-// })
 
 app.listen(PORT, () => {
   console.log('App working at: ', PORT);
@@ -34,7 +30,7 @@ app.post('/sensor-signal', (request, response) => {
 });
 
 app.post('/ping', (request, response) => {
-  log(EVENT_TYPE.ping, [request.body.sensor]);
+  log(EVENT_TYPES.ping, [request.body.sensor]);
   response.send(true);
 });
 
@@ -54,6 +50,27 @@ app.get('/manual-trigger', (request, response) => {
 
 app.get('/get-daily-events', (request, response) => {
   response.send(getDailyEvents());
+});
+
+app.post('/set-daily-event', (request, response) => {
+  let name = request.body.name;
+  let description = request.body.description;
+  let deviceId = request.body.device;
+  let value = request.body.value;
+  let date = request.body.date;
+  if (!name || !description || !deviceId || !value) {
+    response.send(false);
+  } else {
+    let device = devices.find((device) => device.id === deviceId);
+    if (device) {
+      setEvent(name, descriptionm, date, () => {
+        triggerDevice(device, value, true);
+      });
+      response.send(true);
+    } else {
+      response.send(false);
+    }
+  }
 });
 
 app.get('/get-devices', (request, response) => {
