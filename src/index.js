@@ -1,9 +1,10 @@
 const express = require('express');
-
+const cors = require('cors');
 const { updateSensor } = require('./handlers/sensorHandler');
 const { 
   assignDeviceIpAddress,
   triggerDevice,
+  manualTrigger,
   devices,
   setDailyEvents,
   getDailyEvents,
@@ -19,6 +20,8 @@ const PORT = 8080;
 setDailyEvents();
 
 app.use(express.json());
+app.use(cors());
+app.options('*', cors());
 
 app.listen(PORT, () => {
   console.log('App working at: ', PORT);
@@ -43,6 +46,16 @@ app.get('/manual-trigger', (request, response) => {
   if (request.query.device && request.query.value) {
     let device = devices.find(device =>  device.id == request.query.device);
     if (device) triggerDevice(device, request.query.value, true);
+  }
+
+  response.send(true);
+});
+
+app.post('/manual-control', (request, response) => {
+  let device = devices.find(device => device.id === request.body.device);
+  if (device) {
+    manualTrigger(device, request.body.value);
+    device.manual = request.body.manual;
   }
 
   response.send(true);

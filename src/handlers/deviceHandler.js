@@ -67,7 +67,18 @@ function assignDeviceIpAddress(deviceId, address) {
 
 }
 
+/**
+ * Triggers devices based on external behavior, from sensors or daily events.
+ * @param {Object} device Device object to trigger
+ * @param {any} value Value that is being used to trigger the device
+ * @param {boolean} force force trigger, ignoring triggerConditions
+ */
 function triggerDevice(device, value, force) {
+  // Avoid triggering if device is in manual mode
+  if (device.manual) {
+    return;
+  }
+
   // Check for trigger conditions on the device before triggering
   if (!device || (device.triggerCondition && !device.triggerCondition(value) && !force)) {
     return;
@@ -84,6 +95,22 @@ function triggerDevice(device, value, force) {
       setValueDevice(device, value);
   }
   log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
+}
+
+/**
+ * Triggers a device based on more direct interactions that involve user
+ * interactions. This type of trigger will be direct and have no conditions
+ * attatch to it
+ * @param {Object} device Device object to trigger
+ * @param {any} value Value that is being used to trigger the device
+ */
+function manualTrigger(device, value) {
+  switch (device.type) {
+    case 'boolean':
+      triggerBooleanDevice(device, value);;
+    case 'value':
+      setValueDevice(device, value)
+  }
 }
 
 function setValueDevice(device, value) {
@@ -191,7 +218,8 @@ function getDevices() {
       id: device.id,
       name: device.name,
       value: device.value,
-      type: device.type
+      type: device.type,
+      manual: !!device.manual
     };
   });
 }
@@ -221,5 +249,6 @@ exports.assignDeviceIpAddress = assignDeviceIpAddress;
 exports.triggerDevice = triggerDevice;
 exports.getDevices = getDevices;
 exports.setEvent = setEvent;
+exports.manualTrigger = manualTrigger;
 exports.dailyEvents = dailyEvents;
 exports.devices = devices;
