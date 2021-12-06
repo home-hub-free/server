@@ -26,7 +26,7 @@ storage.init({
 const devices = [
   {
     id: 2,
-    name: 'Kitchen upper lights',
+    name: 'Kitchen lights (up)',
     type: 'boolean',
     value: false,
     triggerCondition: (value) => {
@@ -43,7 +43,7 @@ const devices = [
   },
   {
     id: 3,
-    name: 'Rightside livingroom blind',
+    name: 'Livingroom blinds (right)',
     type: 'value',
     value: 0,
     ip: null
