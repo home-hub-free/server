@@ -25,6 +25,13 @@ storage.init({
 
 const devices = [
   {
+    id: 1,
+    name: 'Dinning room lamp',
+    value: false,
+    type: 'boolean',
+    ip: null
+  },
+  {
     id: 2,
     name: 'Kitchen lights (up)',
     type: 'boolean',
@@ -60,7 +67,7 @@ function assignDeviceIpAddress(deviceId, address) {
     assignDeviceValue(device);
   }
 
-  if (device.ip !== ip) {
+  if (device && device.ip !== ip) {
     device.ip = ip;
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
