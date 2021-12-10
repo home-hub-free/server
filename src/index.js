@@ -6,18 +6,20 @@ const {
   triggerDevice,
   manualTrigger,
   devices,
-  setDailyEvents,
-  getDailyEvents,
-  setEvent,
   getDevices
 } = require('./handlers/deviceHandler');
+
+const {
+  getTodayWeather,
+  addDailyEvent
+} = require('./handlers/dailyEventsHandler');
 
 const { log, EVENT_TYPES } = require('./logger');
 
 const app = express();
 const PORT = 8080;
 
-setDailyEvents();
+getTodayWeather();
 
 app.use(express.json());
 app.use(cors());
@@ -76,7 +78,7 @@ app.post('/set-daily-event', (request, response) => {
   } else {
     let device = devices.find((device) => device.id === deviceId);
     if (device) {
-      setEvent(name, descriptionm, date, () => {
+      addDailyEvent(name, descriptionm, date, () => {
         triggerDevice(device, value, true);
       });
       response.send(true);

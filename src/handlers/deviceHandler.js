@@ -1,8 +1,10 @@
 const axios = require('axios');
-const { log, EVENT_TYPES } = require('../logger');
-const moment = require('moment');
-const schedule = require('node-schedule');
 const storage = require('node-persist');
+const { log, EVENT_TYPES } = require('../logger');
+const { 
+  setSunriseEvent,
+  setSunsetEvent 
+} = require('./dailyEventsHandler');
 storage.init({
   dir: './data',
 
@@ -56,6 +58,16 @@ const devices = [
     ip: null
   }
 ];
+
+setSunriseEvent(() => {
+  let blinds = devices[2];
+  manualTrigger(blinds, '50');
+});
+
+setSunsetEvent(() => {
+  let dinningLamp = devices[0];
+  manualTrigger(dinningLamp, true);
+});
 
 function assignDeviceIpAddress(deviceId, address) {
   let device = devices.find((device) => device.id == deviceId);
@@ -146,79 +158,6 @@ function triggerBooleanDevice(device, value) {
   }
 }
 
-var rule = new schedule.RecurrenceRule();
-rule.hour = 00;
-rule.minute = 05;
-rule.second = 00;
-rule.dayOfWeek = new schedule.Range(0,6);
-
-const dailyEvents = {};
-let sunrise = null;
-let sunset = null;
-
-const dailyJob = schedule.scheduleJob(rule, () => {
-  setDailyEvents();
-});
-
-function setDailyEvents() {
-  const coords = {
-    lat: 20.6064818,
-    lng: -100.4898658
-  };
-  let now = new Date();
-  var today = moment(now).format('YYYY-MM-DD');
-
-  axios.get(`https://api.met.no/weatherapi/sunrise/2.0/.json?lat=${coords.lat}&lon=${coords.lng}&date=${today}&offset=-06:00`)
-    .then((result) => {
-      if (result && result.data && result.data.location && result.data.location.time && result.data.location.time.length > 0) {
-        let dayData = result.data.location.time[0];
-        let blinds = devices[1];
-        sunrise = new Date(dayData.sunrise.time);
-        sunset = new Date(dayData.sunset.time);
-        
-        if (blinds) {
-          setEvent('open-blinds', 'Opens living room blinds', sunrise, () => triggerDevice(blinds, '100'));
-          setEvent('close-blinds', 'Closes livingroom blinds', sunset, () => triggerDevice(blinds, '0'));
-        }
-      }
-    })
-    .catch(err => {
-      log(EVENT_TYPES.error, [err]);
-    });
-}
-
-function setEvent(name, description, time, execution) {
-  dailyEvents[name] = {};
-  dailyEvents[name].time = time;
-  dailyEvents[name].description = description;
-  dailyEvents[name].job = schedule.scheduleJob(time, execution);
-
-  log(EVENT_TYPES.daily_event, [name, description, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
-}
-
-function getDailyEvents() {
-  return Object.keys(dailyEvents).map((key) => {
-    let event = dailyEvents[key];
-    return {
-      time: moment(event.time, 'HH:mm:ss').format('hh:mm A'),
-      name: key,
-      description: event.description
-    }
-  });
-}
-
-function isPastSunSet() {
-  return sunset.getTime() < (new Date()).getTime();
-}
-
-function removeTimeFromDate(date, time) {
-  return new Date(date.getTime() - time);
-}
-
-function addTimeToDate(date, time) {
-  return new Date(date.getTime() + time);
-}
-
 function getDevices() {
   return Object.values(devices).map((device) => {
     return {
@@ -250,12 +189,8 @@ function assignDeviceValue(device) {
   });
 }
 
-exports.setDailyEvents = setDailyEvents;
-exports.getDailyEvents = getDailyEvents;
 exports.assignDeviceIpAddress = assignDeviceIpAddress;
 exports.triggerDevice = triggerDevice;
 exports.getDevices = getDevices;
-exports.setEvent = setEvent;
 exports.manualTrigger = manualTrigger;
-exports.dailyEvents = dailyEvents;
 exports.devices = devices;
