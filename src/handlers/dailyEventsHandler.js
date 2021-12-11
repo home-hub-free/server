@@ -80,7 +80,6 @@ function getDailyEvents() {
 
 function addSecondsToTimestamp(timestamp, seconds) {
   timestamp = new Date(timestamp.getTime() + seconds * 1000);
-  // return new Date(timestamp.getTime() + (seconds * 1000));
 }
 
 exports.setSunriseEvent = setSunriseEvent;
