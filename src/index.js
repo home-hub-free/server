@@ -78,7 +78,7 @@ app.post('/set-daily-event', (request, response) => {
   } else {
     let device = devices.find((device) => device.id === deviceId);
     if (device) {
-      addDailyEvent(name, descriptionm, date, () => {
+      addDailyEvent(name, date, () => {
         triggerDevice(device, value, true);
       });
       response.send(true);
