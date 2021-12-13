@@ -3,7 +3,10 @@ const moment = require('moment');
 const schedule = require('node-schedule');
 const { log, EVENT_TYPES } = require('../logger');
 
-let dailyEvents = {};
+let dailyEvents = {
+  sunrise: {},
+  sunset: {}
+};
 // Array of funcitons that will be triggeres at sunrise/sunset
 const atSunrise = [];
 const atSunset = [];
@@ -19,19 +22,29 @@ schedule.scheduleJob(rule, () => {
 });
 
 function addDailyEvent(name, time, execution) {
-  dailyEvents[name] = {};
+  if (!dailyEvents[name]) dailyEvents[name] = {};
+  dailyEvents[name].children = [];
   dailyEvents[name].time = time;
   dailyEvents[name].job = schedule.scheduleJob(time, execution);
-
   log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
 }
 
-function setSunriseEvent(fn) {
-  if (fn) atSunrise.push(fn);
+function setSunriseEvent(desc, fn) {
+  if (fn && desc) {
+    atSunrise.push({
+      fn: fn,
+      description: description
+    });
+  };
 }
 
-function setSunsetEvent(fn) {
-  if (fn) atSunset.push(fn);
+function setSunsetEvent(desc, fn) {
+  if (fn && desc) {
+    atSunset.push({
+      fn: fn,
+      description, description
+    });
+  };
 }
 
 function getTodayWeather() {
@@ -50,16 +63,18 @@ function getTodayWeather() {
         let sunset = new Date(dayData.sunset.time);
 
         addDailyEvent('sunrise', sunrise, () => {
-          atSunrise.forEach((fn) => {
-            fn();
+          atSunrise.forEach((data) => {
+            data.fn();
           });
         });
+        atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.desc));
 
         addDailyEvent('sunset', sunset, () => {
-          atSunset.forEach((fn) => {
-            fn();
+          atSunset.forEach((data) => {
+            data.fn();
           });
         });
+        atSunset.forEach(data => dailyEvents['sunset'].children.push(data.desc));
       }
     })
     .catch(err => {
@@ -70,11 +85,13 @@ function getTodayWeather() {
 function getDailyEvents() {
   return Object.keys(dailyEvents).map((key) => {
     let event = dailyEvents[key];
-    return {
+    let eventData = {
       time: moment(event.time, 'HH:mm:ss').format('hh:mm A'),
       name: key,
-      description: event.description
-    }
+      description: event.description,
+      children: event.children
+    };
+    return eventData
   });
 }
 

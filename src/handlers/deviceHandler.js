@@ -5,6 +5,7 @@ const {
   setSunriseEvent,
   setSunsetEvent 
 } = require('./dailyEventsHandler');
+
 storage.init({
   dir: './data',
   stringify: JSON.stringify,
@@ -52,15 +53,17 @@ const devices = [
   }
 ];
 
-setSunriseEvent(() => {
-  let blinds = devices[2];
-  manualTrigger(blinds, '50');
-});
-
-setSunsetEvent(() => {
-  let dinningLamp = devices[0];
-  manualTrigger(dinningLamp, true);
-});
+function initDailyDevices() {
+  setSunriseEvent('Open living room blinds at 50%', () => {
+    let blinds = devices[2];
+    autoTrigger(blinds, '50');
+  });
+  
+  setSunsetEvent('Turn on dinning room lamp', () => {
+    let dinningLamp = devices[0];
+    autoTrigger(dinningLamp, true);
+  });
+}
 
 function assignDeviceIpAddress(deviceId, address) {
   let device = devices.find((device) => device.id == deviceId);
@@ -85,27 +88,21 @@ function assignDeviceIpAddress(deviceId, address) {
  * @param {any} value Value that is being used to trigger the device
  * @param {boolean} force force trigger, ignoring triggerConditions
  */
-function triggerDevice(device, value, force) {
+function autoTrigger(device, value) {
   // Avoid triggering if device is in manual mode
   if (device.manual) {
     return;
   }
 
   // Check for trigger conditions on the device before triggering
-  if (!device || (device.triggerCondition && !device.triggerCondition(value) && !force)) {
+  if (!device || (device.triggerCondition && !device.triggerCondition(value))) {
     return;
   }
 
   // Avoid trigger overall if the value is still the same, this to save server requests
   if (String(value) === String(device.value)) return;
 
-  switch (device.type) {
-    case 'boolean':
-      triggerBooleanDevice(device, value);
-      break;
-    case 'value':
-      setValueDevice(device, value);
-  }
+  manualTrigger(device, value);
   log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
 }
 
@@ -119,36 +116,22 @@ function triggerDevice(device, value, force) {
 function manualTrigger(device, value) {
   switch (device.type) {
     case 'boolean':
-      triggerBooleanDevice(device, value);;
+      notifyDeviceValue(device, 'toggle', value);
     case 'value':
-      setValueDevice(device, value)
+      notifyDeviceValue(device, 'set', value);
   }
 }
 
-function setValueDevice(device, value) {
-  if (device.ip) {
-    axios.get('http://' + device.ip + '/set?value=' + value)
-      .then(() => {
-        device.value = value;
-        storeDeviceValue(device);
-      })
-      .catch((error) => {
-        log(EVENT_TYPES.error, [error.message]);
-      });
+function notifyDeviceValue(device, endpoint, value) {
+  if (!device.ip) {
+    return;
   }
-}
-
-function triggerBooleanDevice(device, value) {
-  if (device.ip) {
-    axios.get('http://' + device.ip + '/toggle?value=' + value)
-      .then(() => {
-        device.value = value;
-        storeDeviceValue(device);
-      })
-      .catch((error) => {
-        log(EVENT_TYPES.error, [error.message]);
-      });
-  }
+  axios.get(`http://${device.ip}/${endpoint}?value=${value}`).then(() => {
+    device.value = value;
+    storeDeviceValue(device);
+  }).catch((error) => {
+    log(EVENT_TYPES.error, [error.message]);
+  });
 }
 
 function getDevices() {
@@ -183,7 +166,8 @@ function assignDeviceValue(device) {
 }
 
 exports.assignDeviceIpAddress = assignDeviceIpAddress;
-exports.triggerDevice = triggerDevice;
+exports.autoTrigger = autoTrigger;
 exports.getDevices = getDevices;
 exports.manualTrigger = manualTrigger;
+exports.initDailyDevices = initDailyDevices;
 exports.devices = devices;

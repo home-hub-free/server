@@ -1,6 +1,6 @@
-const { triggerDevice, devices } = require('./deviceHandler');
+const { autoTrigger, devices } = require('./deviceHandler');
 const { log, EVENT_TYPES } = require('../logger');
-const TIMER = 1000 * 40;
+const TIMER = 1000 * 60;
 
 const ROOMS = {
   LIVING_ROOM: 'living-room',
@@ -18,7 +18,6 @@ let activeStates = {
     triggerOnActive: [2]
   }
 };
-
 
 function updateRoomState(room, value) {
   if (!activeStates[room] || !value) {
@@ -45,7 +44,7 @@ function checkTriggers(roomState, value) {
   if (roomState.triggerOnActive && roomState.triggerOnActive.length > 0) {
     roomState.triggerOnActive.forEach(id => {
       let device = devices.find((device) => device.id == id);
-      if (device) triggerDevice(device, value);
+      if (device) autoTrigger(device, value);
     });
   }
 }

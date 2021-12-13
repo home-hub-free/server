@@ -3,15 +3,17 @@ const cors = require('cors');
 const { updateSensor } = require('./handlers/sensorHandler');
 const { 
   assignDeviceIpAddress,
-  triggerDevice,
+  autoTrigger,
   manualTrigger,
   devices,
-  getDevices
+  getDevices,
+  initDailyDevices
 } = require('./handlers/deviceHandler');
 
 const {
   getTodayWeather,
-  addDailyEvent
+  addDailyEvent,
+  getDailyEvents
 } = require('./handlers/dailyEventsHandler');
 
 const { log, EVENT_TYPES } = require('./logger');
@@ -20,6 +22,7 @@ const app = express();
 const PORT = 8080;
 
 getTodayWeather();
+initDailyDevices();
 
 app.use(express.json());
 app.use(cors());
@@ -44,14 +47,14 @@ app.post('/add-device-ip', (request, response) => {
   response.send(true);
 });
 
-app.get('/manual-trigger', (request, response) => {
-  if (request.query.device && request.query.value) {
-    let device = devices.find(device =>  device.id == request.query.device);
-    if (device) triggerDevice(device, request.query.value, true);
-  }
+// app.get('/auto-trigger', (request, response) => {
+//   if (request.query.device && request.query.value) {
+//     let device = devices.find(device =>  device.id == request.query.device);
+//     if (device) autoTrigger(device, request.query.value);
+//   }
 
-  response.send(true);
-});
+//   response.send(true);
+// });
 
 app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
@@ -79,7 +82,7 @@ app.post('/set-daily-event', (request, response) => {
     let device = devices.find((device) => device.id === deviceId);
     if (device) {
       addDailyEvent(name, date, () => {
-        triggerDevice(device, value, true);
+        autoTrigger(device, value, true);
       });
       response.send(true);
     } else {
