@@ -29,7 +29,7 @@ function addDailyEvent(name, time, execution) {
   log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
 }
 
-function setSunriseEvent(desc, fn) {
+function setSunriseEvent(description, fn) {
   if (fn && desc) {
     atSunrise.push({
       fn: fn,
