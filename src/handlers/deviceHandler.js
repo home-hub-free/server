@@ -117,8 +117,10 @@ function manualTrigger(device, value) {
   switch (device.type) {
     case 'boolean':
       notifyDeviceValue(device, 'toggle', value);
+      break;
     case 'value':
       notifyDeviceValue(device, 'set', value);
+      break;
   }
 }
 
