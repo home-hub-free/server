@@ -30,7 +30,7 @@ function addDailyEvent(name, time, execution) {
 }
 
 function setSunriseEvent(description, fn) {
-  if (fn && desc) {
+  if (fn && description) {
     atSunrise.push({
       fn: fn,
       description: description
@@ -38,8 +38,8 @@ function setSunriseEvent(description, fn) {
   };
 }
 
-function setSunsetEvent(desc, fn) {
-  if (fn && desc) {
+function setSunsetEvent(description, fn) {
+  if (fn && description) {
     atSunset.push({
       fn: fn,
       description, description
@@ -67,14 +67,14 @@ function getTodayWeather() {
             data.fn();
           });
         });
-        atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.desc));
+        atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.description));
 
         addDailyEvent('sunset', sunset, () => {
           atSunset.forEach((data) => {
             data.fn();
           });
         });
-        atSunset.forEach(data => dailyEvents['sunset'].children.push(data.desc));
+        atSunset.forEach(data => dailyEvents['sunset'].children.push(data.description));
       }
     })
     .catch(err => {
