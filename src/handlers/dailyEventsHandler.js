@@ -17,7 +17,7 @@ rule.minute = 05;
 rule.second = 00;
 rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
-  dailyEvents = {};
+  cleanup();
   getTodayWeather();
 });
 
@@ -97,6 +97,13 @@ function getDailyEvents() {
 
 function addSecondsToTimestamp(timestamp, seconds) {
   timestamp = new Date(timestamp.getTime() + seconds * 1000);
+}
+
+function cleanup() {
+  dailyEvents = {
+    sunrise: {},
+    sunset: {}
+  };
 }
 
 exports.setSunriseEvent = setSunriseEvent;
