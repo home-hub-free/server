@@ -22,10 +22,12 @@ schedule.scheduleJob(rule, () => {
 });
 
 function addDailyEvent(name, time, execution) {
-  if (!dailyEvents[name]) dailyEvents[name] = {};
+  if (!dailyEvents[name]) {
+    dailyEvents[name] = {}
+  };
   dailyEvents[name].children = [];
   dailyEvents[name].time = time;
-  dailyEvents[name].job = schedule.scheduleJob(time, execution);
+  dailyEvents[name].job = schedule.scheduleJob(time, () => execution());
   log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
 }
 
@@ -63,16 +65,16 @@ function getTodayWeather() {
         let sunset = new Date(dayData.sunset.time);
 
         addDailyEvent('sunrise', sunrise, () => {
-          atSunrise.forEach((data) => {
-            data.fn();
-          });
+          atSunrise.forEach(data => data.fn());
+          log(EVENT_TYPES.daily_event, ['Executing scheduled sunrise']);
+          console.log(atSunrise);
         });
         atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.description));
 
         addDailyEvent('sunset', sunset, () => {
-          atSunset.forEach((data) => {
-            data.fn();
-          });
+          atSunset.forEach(data => data.fn());
+          log(EVENT_TYPES.daily_event, ['Executing scheduled sunset']);
+          console.log(atSunset);
         });
         atSunset.forEach(data => dailyEvents['sunset'].children.push(data.description));
       }
@@ -93,6 +95,14 @@ function getDailyEvents() {
     };
     return eventData
   });
+}
+
+function addHoursToTimestamp(timestamp, hours) {
+  timestamp = new Date(timestamp.getTime() + addMinutesToTimestamp(timestamp, hours * 60));
+}
+
+function addMinutesToTimestamp(timestamp, minutes) {
+  timestamp = new Date(timestamp.getTime() + addSecondsToTimestamp(timestamp, minutes * 60))
 }
 
 function addSecondsToTimestamp(timestamp, seconds) {

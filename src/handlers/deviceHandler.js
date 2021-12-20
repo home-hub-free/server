@@ -54,15 +54,20 @@ const devices = [
 ];
 
 function initDailyDevices() {
-  setSunriseEvent('Open living room blinds at 50%', () => {
+  setSunriseEvent('Open living room blinds at 60%', () => {
     let blinds = devices[2];
-    autoTrigger(blinds, '50');
+    autoTrigger(blinds, '60');
   });
+
+  setSunsetEvent('Close living room blinds', () => {
+    let blinds = devices[2];
+    autoTrigger(blinds, '0');
+  })
   
-  setSunsetEvent('Turn on dinning room lamp', () => {
-    let dinningLamp = devices[0];
-    autoTrigger(dinningLamp, true);
-  });
+  // setSunsetEvent('Turn on dinning room lamp', () => {
+  //   let dinningLamp = devices[0];
+  //   autoTrigger(dinningLamp, true);
+  // });
 }
 
 function assignDeviceIpAddress(deviceId, address) {
@@ -103,7 +108,7 @@ function autoTrigger(device, value) {
   if (String(value) === String(device.value)) return;
 
   manualTrigger(device, value);
-  log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
+  // log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
 }
 
 /**
