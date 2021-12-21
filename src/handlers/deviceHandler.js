@@ -3,7 +3,7 @@ const storage = require('node-persist');
 const { log, EVENT_TYPES } = require('../logger');
 const { 
   setSunriseEvent,
-  setSunsetEvent 
+  setSunsetEvent
 } = require('./dailyEventsHandler');
 
 storage.init({
@@ -20,13 +20,13 @@ storage.init({
 });
 
 const devices = [
-  {
-    id: 1,
-    name: 'Dinning room lamp',
-    value: false,
-    type: 'boolean',
-    ip: null
-  },
+  // {
+  //   id: 1,
+  //   name: 'Dinning room lamp',
+  //   value: false,
+  //   type: 'boolean',
+  //   ip: null
+  // },
   {
     id: 2,
     name: 'Kitchen lights (up)',
@@ -34,14 +34,17 @@ const devices = [
     value: false,
     triggerCondition: (value) => {
       let blinds = devices.find((device) => device.id === 3);
-      let blindsClosed = parseInt(blinds.value) === 0;
-      value = value === 'true';
-      // Only do this validations if we are trying to turn the lights on
-      if (value) {
-        return (isPastSunSet() || blindsClosed);
-      }
-      return true;
+      let blindsVal = parseInt(blinds.value);
+      let hour = new Date().getHours();
+      return hour > 6 && blindsVal < 50;
     },
+    ip: null
+  },
+  {
+    id: 4,
+    name: 'Kitchen lights (down)',
+    type: 'boolean',
+    // triggerCondition: (value) => true,
     ip: null
   },
   {
@@ -62,7 +65,7 @@ function initDailyDevices() {
   setSunsetEvent('Close living room blinds', () => {
     let blinds = devices[2];
     autoTrigger(blinds, '0');
-  })
+  });
   
   // setSunsetEvent('Turn on dinning room lamp', () => {
   //   let dinningLamp = devices[0];
@@ -76,7 +79,7 @@ function assignDeviceIpAddress(deviceId, address) {
   let ip = chunks[chunks.length - 1];
   if (device && !device.ip) {
     device.ip = ip;
-    log(EVENT_TYPES.device_detected, [deviceId, ip]);
+    log(EVENT_TYPES.device_detected, [deviceId, device.name, ip]);
     assignDeviceValue(device);
   }
 
@@ -168,7 +171,7 @@ function assignDeviceValue(device) {
   storage.getItem(id).then(value => {
     if (value) device.value = JSON.parse(value);
 
-    log(EVENT_TYPES.init_value, [id, value]);
+    log(EVENT_TYPES.init_value, [id, device.name, value]);
   });
 }
 
