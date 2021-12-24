@@ -41,7 +41,7 @@ const devices = [
     ip: null
   },
   {
-    id: 4,
+    id: 1,
     name: 'Kitchen lights (down)',
     type: 'boolean',
     // triggerCondition: (value) => true,
@@ -50,6 +50,13 @@ const devices = [
   {
     id: 3,
     name: 'Livingroom blinds (right)',
+    type: 'value',
+    value: 0,
+    ip: null
+  },
+  {
+    id: 4,
+    name: 'Livingroom blinds (left)',
     type: 'value',
     value: 0,
     ip: null
