@@ -20,13 +20,13 @@ storage.init({
 });
 
 const devices = [
-  // {
-  //   id: 1,
-  //   name: 'Dinning room lamp',
-  //   value: false,
-  //   type: 'boolean',
-  //   ip: null
-  // },
+  {
+    id: 1,
+    name: 'Kitchen lights (down)',
+    type: 'boolean',
+    // triggerCondition: (value) => true,
+    ip: null
+  },
   {
     id: 2,
     name: 'Kitchen lights (up)',
@@ -38,13 +38,6 @@ const devices = [
       let hour = new Date().getHours();
       return hour > 6 && blindsVal < 50;
     },
-    ip: null
-  },
-  {
-    id: 1,
-    name: 'Kitchen lights (down)',
-    type: 'boolean',
-    // triggerCondition: (value) => true,
     ip: null
   },
   {

@@ -15,7 +15,7 @@ let activeStates = {
     active: false,
     timer: null,
     // Devices that will trigger when this room is active
-    triggerOnActive: [2, 4]
+    triggerOnActive: [1, 2]
   }
 };
 
