@@ -58,19 +58,14 @@ const devices = [
 
 function initDailyDevices() {
   setSunriseEvent('Open living room blinds at 60%', () => {
-    let blinds = devices[2];
+    let blinds = devices.find(device => device.id === 3);
     autoTrigger(blinds, '60');
   });
 
   setSunsetEvent('Close living room blinds', () => {
-    let blinds = devices[2];
+    let blinds = devices.find(device => device.id === 3);
     autoTrigger(blinds, '0');
   });
-  
-  // setSunsetEvent('Turn on dinning room lamp', () => {
-  //   let dinningLamp = devices[0];
-  //   autoTrigger(dinningLamp, true);
-  // });
 }
 
 function assignDeviceIpAddress(deviceId, address) {
@@ -87,7 +82,6 @@ function assignDeviceIpAddress(deviceId, address) {
     device.ip = ip;
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
-
 }
 
 /**
@@ -134,13 +128,14 @@ function manualTrigger(device, value) {
 
 function notifyDeviceValue(device, endpoint, value) {
   if (!device.ip) {
+    log(EVENT_TYPES.error, ['Device without IP address:', device.name])
     return;
   }
   axios.get(`http://${device.ip}/${endpoint}?value=${value}`).then(() => {
     device.value = value;
     storeDeviceValue(device);
   }).catch((error) => {
-    log(EVENT_TYPES.error, [error.message]);
+    log(EVENT_TYPES.error, [`Device not found, ${device.name}`, error.message]);
   });
 }
 
@@ -170,7 +165,6 @@ function assignDeviceValue(device) {
   let id = JSON.stringify(device.id);
   storage.getItem(id).then(value => {
     if (value) device.value = JSON.parse(value);
-
     log(EVENT_TYPES.init_value, [id, device.name, value]);
   });
 }

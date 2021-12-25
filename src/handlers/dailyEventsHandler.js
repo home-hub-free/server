@@ -28,7 +28,7 @@ function addDailyEvent(name, time, execution) {
   dailyEvents[name].children = [];
   dailyEvents[name].time = time;
   dailyEvents[name].job = schedule.scheduleJob(time, () => execution());
-  log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
+  // log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
 }
 
 function setSunriseEvent(description, fn) {
@@ -67,14 +67,12 @@ function getTodayWeather() {
         addDailyEvent('sunrise', sunrise, () => {
           atSunrise.forEach(data => data.fn());
           log(EVENT_TYPES.daily_event, ['Executing scheduled sunrise']);
-          console.log(atSunrise);
         });
         atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.description));
 
         addDailyEvent('sunset', sunset, () => {
           atSunset.forEach(data => data.fn());
           log(EVENT_TYPES.daily_event, ['Executing scheduled sunset']);
-          console.log(atSunset);
         });
         atSunset.forEach(data => dailyEvents['sunset'].children.push(data.description));
       }
