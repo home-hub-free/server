@@ -28,7 +28,6 @@ function addDailyEvent(name, time, execution) {
   dailyEvents[name].children = [];
   dailyEvents[name].time = time;
   dailyEvents[name].job = schedule.scheduleJob(time, () => execution());
-  // log(EVENT_TYPES.daily_event, [name, 'at: ' + moment(time, 'HH:mm:ss').format('hh:mm A')]);
 }
 
 function setSunriseEvent(description, fn) {
@@ -114,9 +113,19 @@ function cleanup() {
   };
 }
 
+function isPastSunset() {
+  let now = new Date().getTime();
+  let sunset = dailyEvents['sunset'].time;
+  if (sunset) {
+    return now >= sunset;
+  }
+  return null;
+}
+
 exports.setSunriseEvent = setSunriseEvent;
 exports.setSunsetEvent = setSunsetEvent;
 exports.getDailyEvents = getDailyEvents;
 exports.getTodayWeather = getTodayWeather;
 exports.addDailyEvent = addDailyEvent;
+exports.isPastSunset = isPastSunset;
 exports.dailyEvents = dailyEvents;

@@ -3,7 +3,8 @@ const storage = require('node-persist');
 const { log, EVENT_TYPES } = require('../logger');
 const { 
   setSunriseEvent,
-  setSunsetEvent
+  setSunsetEvent,
+  isPastSunset
 } = require('./dailyEventsHandler');
 
 storage.init({
@@ -52,6 +53,14 @@ const devices = [
     name: 'Livingroom blinds (left)',
     type: 'value',
     value: 0,
+    ip: null
+  },
+  {
+    id: 5,
+    name:'Dinning lamp',
+    type: 'boolean',
+    value: false,
+    triggerCondition: isPastSunset,
     ip: null
   }
 ];
