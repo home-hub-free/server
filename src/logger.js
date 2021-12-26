@@ -18,7 +18,7 @@ const blockedLogs = [
   EVENT_TYPES.ping,
   EVENT_TYPES.device_new_ip,
   EVENT_TYPES.device_triggered,
-  EVENT_TYPES.timer_reset
+  // EVENT_TYPES.timer_reset
 ];
 
 // Used just to make sure we log 100% text and not objects
