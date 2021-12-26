@@ -58,7 +58,7 @@ function updateRoomState(room, value) {
     clearTimeout(roomState.timer);
     log(EVENT_TYPES.timer_reset, [room]);
   } else {
-    log(EVENT_TYPES.room_active, [room]);p
+    log(EVENT_TYPES.room_active, [room]);
   }
   checkTriggers(roomState, value);
 
