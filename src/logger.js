@@ -23,7 +23,7 @@ const blockedLogs = [
 
 // Used just to make sure we log 100% text and not objects
 function log(type, texts) {
-  if (block()) {
+  if (block(type)) {
     return;
   }
 
