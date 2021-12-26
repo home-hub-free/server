@@ -14,11 +14,11 @@ const EVENT_TYPES = {
 };
 
 const blockedLogs = [
-  init_value,
-  ping,
-  device_new_ip,
-  device_triggered,
-  timer_reset
+  EVENT_TYPES.init_value,
+  EVENT_TYPES.ping,
+  EVENT_TYPES.device_new_ip,
+  EVENT_TYPES.device_triggered,
+  EVENT_TYPES.timer_reset
 ];
 
 // Used just to make sure we log 100% text and not objects
