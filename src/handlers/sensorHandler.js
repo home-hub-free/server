@@ -44,6 +44,11 @@ function updateSensor(sensorId, value) {
   }
 }
 
+/**
+ * Boolean sensors are only used to update active state in rooms
+ * @param {*} sensor 
+ * @param {boolean} value Sensor state true/false
+ */
 function updateBooleanSensor(sensor, value) {
   sensor.value = value === 1;
   // This sensor is related to rooms
@@ -54,6 +59,12 @@ function updateBooleanSensor(sensor, value) {
   }
 }
 
+/**
+ * Value sensors will be used to store data, like temp
+ * humidity, light levels, 
+ * @param {*} sensor 
+ * @param {*} value Value gathered from sensor
+ */
 function updateValueSensor(sensor, value) {
   
 }

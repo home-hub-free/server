@@ -14,8 +14,6 @@ let activeStates = {
   [ROOMS.KITCHEN]: {
     active: false,
     timer: null,
-    // Devices that will trigger when this room is active
-    triggerOnActive: [1, 2],
     onActive: () => {
       let kitchenLights = [devices[0], devices[1]];
       kitchenLights.forEach((lights) => {
@@ -26,22 +24,32 @@ let activeStates = {
       let kitchenLights = [devices[0], devices[1]];
       kitchenLights.forEach(lights => {
         autoTrigger(lights, false);
-      })
+      });
     }
   },
   [ROOMS.DINNING_ROOM]: {
     active: false,
     timer: null,
-    triggerOnActive: [5],
-    onActive: () => {},
-    onInactive: () => {}
+    onActive: () => {
+      let dinningLamp = devices[4];
+      autoTrigger(dinningLamp, true);
+    },
+    onInactive: () => {
+      let dinningLamp = devices[4];
+      autoTrigger(dinningLamp, false);
+    }
   },
   [ROOMS.LIVING_ROOM]: {
     active: false,
     timer: null,
-    triggerOnActive: [5],
-    onActive: () => {},
-    onInactive: () => {}
+    onActive: () => {
+      let dinningLamp = devices[4];
+      autoTrigger(dinningLamp, true);
+    },
+    onInactive: () => {
+      let dinningLamp = devices[4];
+      autoTrigger(dinningLamp, false);
+    }
   }
 };
 
@@ -58,20 +66,20 @@ function updateRoomState(room, value) {
     clearTimeout(roomState.timer);
     log(EVENT_TYPES.timer_reset, [room]);
   } else {
+    roomState.onActive();
     log(EVENT_TYPES.room_active, [room]);
   }
-  checkTriggers(roomState, value);
 
   // Set the timer for this room
   roomState.timer = setTimeout(() => {
     roomState.state = true;
     roomState.timer = null;
+    roomState.onInactive();
     log(EVENT_TYPES.room_innactive, [room]);
-    // roomState.onInactive();
-    checkTriggers(roomState, false);
   }, TIMER);
 }
 
+// Deprecated
 function checkTriggers(roomState, value) {
   if (!(roomState.triggerOnActive && roomState.triggerOnActive.length > 0)) {
     return;

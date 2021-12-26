@@ -34,10 +34,14 @@ const devices = [
     type: 'boolean',
     value: false,
     triggerCondition: (value) => {
-      let blinds = devices.find((device) => device.id === 3);
-      let blindsVal = parseInt(blinds.value);
+      let blindsRight = devices.find(device => device.id === 3);
+      let blindsLeft = devices.find(device => device.id === 4);
+      let sum = parseInt(blindsRight.value) + parseInt(blindsLeft.value);
       let hour = new Date().getHours();
-      return hour > 6 && blindsVal < 50;
+      if (value) {
+        return hour > 6 && sum < 60;
+      }
+      return value;
     },
     ip: null
   },
@@ -60,8 +64,11 @@ const devices = [
     name:'Dinningroom/Livingroom lamp',
     type: 'boolean',
     value: false,
-    triggerCondition: () => {
-      return isPastSunset();
+    triggerCondition: (value) => {
+      if (value) {
+        return isPastSunset();
+      }
+      return value;
     },
     ip: null
   }
