@@ -39,6 +39,8 @@ function updateSensor(sensorId, value) {
     case 'boolean':
       updateBooleanSensor(sensor, value);
       break;
+    case 'value':
+      updateValueSensor(sensor, value);
   }
 }
 

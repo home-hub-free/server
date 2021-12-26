@@ -11,15 +11,31 @@ const EVENT_TYPES = {
   timer_reset: '[TIMER RESET]',
   init_value: '[INIT VALUE]',
   error: '[ERROR]'
-}
+};
+
+const blockedLogs = [
+  init_value,
+  ping,
+  device_new_ip,
+  device_triggered,
+  timer_reset
+];
 
 // Used just to make sure we log 100% text and not objects
 function log(type, texts) {
+  if (block()) {
+    return;
+  }
+
   let display = '';
   texts.forEach((val) => {
     display += ' ' + val + ' ';
-  })
+  });
   console.log(moment(new Date()).format('LLL'), type, display);
+}
+
+function block(type) {
+  return blockedLogs.indexOf(type) > -1;
 }
 
 exports.log = log;

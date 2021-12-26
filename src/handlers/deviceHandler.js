@@ -60,7 +60,9 @@ const devices = [
     name:'Dinningroom/Livingroom lamp',
     type: 'boolean',
     value: false,
-    triggerCondition: isPastSunset,
+    triggerCondition: () => {
+      return isPastSunset();
+    },
     ip: null
   }
 ];
@@ -118,7 +120,7 @@ function autoTrigger(device, value) {
   if (String(value) === String(device.value)) return;
 
   manualTrigger(device, value);
-  // log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
+  log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
 }
 
 /**
@@ -148,7 +150,7 @@ function notifyDeviceValue(device, endpoint, value) {
     device.value = value;
     storeDeviceValue(device);
   }).catch((error) => {
-    log(EVENT_TYPES.error, [`Device not found, ${device.name}`, error.message]);
+    log(EVENT_TYPES.error, [`Device not found 404, ${device.name}`, error.message]);
   });
 }
 

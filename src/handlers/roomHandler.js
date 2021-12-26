@@ -15,17 +15,33 @@ let activeStates = {
     active: false,
     timer: null,
     // Devices that will trigger when this room is active
-    triggerOnActive: [1, 2]
+    triggerOnActive: [1, 2],
+    onActive: () => {
+      let kitchenLights = [devices[0], devices[1]];
+      kitchenLights.forEach((lights) => {
+        autoTrigger(lights, true);
+      });
+    },
+    onInactive: () => {
+      let kitchenLights = [devices[0], devices[1]];
+      kitchenLights.forEach(lights => {
+        autoTrigger(lights, false);
+      })
+    }
   },
   [ROOMS.DINNING_ROOM]: {
     active: false,
     timer: null,
-    triggerOnActive: [5]
+    triggerOnActive: [5],
+    onActive: () => {},
+    onInactive: () => {}
   },
   [ROOMS.LIVING_ROOM]: {
     active: false,
     timer: null,
-    triggerOnActive: [5]
+    triggerOnActive: [5],
+    onActive: () => {},
+    onInactive: () => {}
   }
 };
 
@@ -38,7 +54,12 @@ function updateRoomState(room, value) {
   // This room is now active
   roomState.state = true;
   // Check if a timer already exists
-  roomState.timer ? clearTimeout(roomState.timer) : log(EVENT_TYPES.room_active, [room]);
+  if (roomState.timer) {
+    clearTimeout(roomState.timer);
+    log(EVENT_TYPES.timer_reset, [room]);
+  } else {
+    log(EVENT_TYPES.room_active, [room]);p
+  }
   checkTriggers(roomState, value);
 
   // Set the timer for this room
@@ -46,17 +67,21 @@ function updateRoomState(room, value) {
     roomState.state = true;
     roomState.timer = null;
     log(EVENT_TYPES.room_innactive, [room]);
+    // roomState.onInactive();
     checkTriggers(roomState, false);
   }, TIMER);
 }
 
 function checkTriggers(roomState, value) {
-  if (roomState.triggerOnActive && roomState.triggerOnActive.length > 0) {
-    roomState.triggerOnActive.forEach(id => {
-      let device = devices.find((device) => device.id == id);
-      if (device) autoTrigger(device, value);
-    });
+  if (!(roomState.triggerOnActive && roomState.triggerOnActive.length > 0)) {
+    return;
   }
+
+  let triggers = roomState.triggerOnActive;
+  triggers.forEach(id => {
+    let device = devices.find((device) => device.id == id);
+    if (device) autoTrigger(device, value);
+  });
 }
 
 exports.ROOMS = ROOMS;
