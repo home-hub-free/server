@@ -41,7 +41,7 @@ const devices = [
       if (value) {
         return hour > 6 && sum < 60;
       }
-      return value;
+      return true;
     },
     ip: null
   },
@@ -68,7 +68,7 @@ const devices = [
       if (value) {
         return isPastSunset();
       }
-      return value;
+      return true;
     },
     ip: null
   }
