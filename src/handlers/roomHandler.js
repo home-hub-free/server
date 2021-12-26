@@ -16,6 +16,11 @@ let activeStates = {
     timer: null,
     // Devices that will trigger when this room is active
     triggerOnActive: [1, 2]
+  },
+  [ROOMS.DINNING_ROOM]: {
+    active: false,
+    timer: null,
+    triggerOnActive: [5]
   }
 };
 
