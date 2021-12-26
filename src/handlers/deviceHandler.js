@@ -57,7 +57,7 @@ const devices = [
   },
   {
     id: 5,
-    name:'Dinning lamp',
+    name:'Dinningroom/Livingroom lamp',
     type: 'boolean',
     value: false,
     triggerCondition: isPastSunset,
@@ -67,13 +67,17 @@ const devices = [
 
 function initDailyDevices() {
   setSunriseEvent('Open living room blinds at 60%', () => {
-    let blinds = devices.find(device => device.id === 3);
-    autoTrigger(blinds, '60');
+    let blindsRight = devices.find(device => device.id === 3);
+    let blindsLeft = devices.find(device => device.id === 4);
+    autoTrigger(blindsRight, '40');
+    autoTrigger(blindsLeft, '40');
   });
 
   setSunsetEvent('Close living room blinds', () => {
-    let blinds = devices.find(device => device.id === 3);
-    autoTrigger(blinds, '0');
+    let blindsRight = devices.find(device => device.id === 3);
+    let blindsLeft = devices.find(device => device.id === 4);
+    autoTrigger(blindsRight, '0');
+    autoTrigger(blindsLeft, '0');
   });
 }
 

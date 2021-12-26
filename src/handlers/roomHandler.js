@@ -21,6 +21,11 @@ let activeStates = {
     active: false,
     timer: null,
     triggerOnActive: [5]
+  },
+  [ROOMS.LIVING_ROOM]: {
+    active: false,
+    timer: null,
+    triggerOnActive: [5]
   }
 };
 
