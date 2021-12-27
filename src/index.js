@@ -50,12 +50,10 @@ app.post('/add-device-ip', (request, response) => {
 app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
   if (device) {
-    device.manual = request.body.manual;
-    if (device.manual) {
-      manualTrigger(device, request.body.value);
-    }
+    // Avoid changing value type devices to manual mode for now
+    device.manual = request.body.manual && device.type !== 'value';
+    manualTrigger(device, request.body.value);
   }
-
   response.send(true);
 });
 
