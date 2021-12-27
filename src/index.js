@@ -47,20 +47,13 @@ app.post('/add-device-ip', (request, response) => {
   response.send(true);
 });
 
-// app.get('/auto-trigger', (request, response) => {
-//   if (request.query.device && request.query.value) {
-//     let device = devices.find(device =>  device.id == request.query.device);
-//     if (device) autoTrigger(device, request.query.value);
-//   }
-
-//   response.send(true);
-// });
-
 app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
   if (device) {
-    manualTrigger(device, request.body.value);
     device.manual = request.body.manual;
+    if (device.manual) {
+      manualTrigger(device, request.body.value);
+    }
   }
 
   response.send(true);

@@ -15,14 +15,12 @@ let activeStates = {
     active: false,
     timer: null,
     onActive: () => {
-      let kitchenLights = [devices[0], devices[1]];
-      kitchenLights.forEach((lights) => {
+      [devices[0], devices[1]].forEach(lights => {
         autoTrigger(lights, true);
       });
     },
     onInactive: () => {
-      let kitchenLights = [devices[0], devices[1]];
-      kitchenLights.forEach(lights => {
+      [devices[0], devices[1]].forEach(lights => {
         autoTrigger(lights, false);
       });
     }
@@ -30,26 +28,15 @@ let activeStates = {
   [ROOMS.DINNING_ROOM]: {
     active: false,
     timer: null,
-    onActive: () => {
-      let dinningLamp = devices[4];
-      autoTrigger(dinningLamp, true);
-    },
-    onInactive: () => {
-      let dinningLamp = devices[4];
-      autoTrigger(dinningLamp, false);
-    }
+    onActive: () => autoTrigger(devices[4], true),
+    onInactive: () => autoTrigger(devices[4], false)
+    
   },
   [ROOMS.LIVING_ROOM]: {
     active: false,
     timer: null,
-    onActive: () => {
-      let dinningLamp = devices[4];
-      autoTrigger(dinningLamp, true);
-    },
-    onInactive: () => {
-      let dinningLamp = devices[4];
-      autoTrigger(dinningLamp, false);
-    }
+    onActive: () => autoTrigger(devices[4], true),
+    onInactive: () => autoTrigger(devices[4], false)
   }
 };
 
