@@ -17,6 +17,7 @@ const {
 } = require('./handlers/dailyEventsHandler');
 
 const { log, EVENT_TYPES } = require('./logger');
+const { getRoomsStates } = require('./handlers/roomHandler');
 
 const app = express();
 const PORT = 8080;
@@ -84,4 +85,8 @@ app.post('/set-daily-event', (request, response) => {
 
 app.get('/get-devices', (request, response) => {
   response.send(getDevices());
+});
+
+app.get('/get-room-states', (request, response) => {
+  response.send(getRoomsStates());
 });

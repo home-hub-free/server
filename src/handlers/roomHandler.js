@@ -14,6 +14,7 @@ let activeStates = {
   [ROOMS.KITCHEN]: {
     active: false,
     timer: null,
+    data: {},
     onActive: () => {
       [devices[0], devices[1]].forEach(lights => {
         autoTrigger(lights, true);
@@ -28,6 +29,7 @@ let activeStates = {
   [ROOMS.DINNING_ROOM]: {
     active: false,
     timer: null,
+    data: {},
     onActive: () => autoTrigger(devices[4], true),
     onInactive: () => autoTrigger(devices[4], false)
     
@@ -35,8 +37,16 @@ let activeStates = {
   [ROOMS.LIVING_ROOM]: {
     active: false,
     timer: null,
+    data: {},
     onActive: () => autoTrigger(devices[4], true),
     onInactive: () => autoTrigger(devices[4], false)
+  },
+  [ROOMS.MAIN_ROOM]: {
+    active: false,
+    timer: null,
+    data: {},
+    onActive: () => {},
+    onInactive: () => {}
   }
 };
 
@@ -66,19 +76,36 @@ function updateRoomState(room, value) {
   }, TIMER);
 }
 
-// Deprecated
-function checkTriggers(roomState, value) {
-  if (!(roomState.triggerOnActive && roomState.triggerOnActive.length > 0)) {
-    return;
-  }
+function updateRoomData(room, cb) {
+  cb(activeStates[room].data);
+}
 
-  let triggers = roomState.triggerOnActive;
-  triggers.forEach(id => {
-    let device = devices.find((device) => device.id == id);
-    if (device) autoTrigger(device, value);
+// Deprecated
+// function checkTriggers(roomState, value) {
+//   if (!(roomState.triggerOnActive && roomState.triggerOnActive.length > 0)) {
+//     return;
+//   }
+
+//   let triggers = roomState.triggerOnActive;
+//   triggers.forEach(id => {
+//     let device = devices.find((device) => device.id == id);
+//     if (device) autoTrigger(device, value);
+//   });
+// }
+
+function getRoomsStates() {
+  return Object.keys(activeStates).map(key => {
+    let state = activeStates[key];
+    return {
+      room: key,
+      active: state.active,
+      data: state.data
+    };
   });
 }
 
 exports.ROOMS = ROOMS;
 exports.activeStates = activeStates;
 exports.updateRoomState = updateRoomState;
+exports.updateRoomData = updateRoomData;
+exports.getRoomsStates = getRoomsStates;

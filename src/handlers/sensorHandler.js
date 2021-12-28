@@ -1,4 +1,4 @@
-const { updateRoomState, ROOMS } = require('./roomHandler');
+const { updateRoomState, ROOMS, updateRoomData } = require('./roomHandler');
 
 const sensors = [
   {
@@ -6,28 +6,28 @@ const sensors = [
     type: 'boolean',
     description: 'Motion sensor',
     value: false,
-    rooms: [ROOMS.LIVING_ROOM]
+    rooms: [ROOMS.LIVING_ROOM],
   },
   {
     id: 2,
     type: 'boolean',
     description: 'Motion sensor',
     value: false,
-    rooms: [ROOMS.DINNING_ROOM]
+    rooms: [ROOMS.DINNING_ROOM],
   },
   {
     id: 3,
     type: 'boolean',
     description: 'Motion sensor',
     value: false,
-    rooms: [ROOMS.KITCHEN]
+    rooms: [ROOMS.KITCHEN],
   },
   {
     id: 4,
     type: 'value',
     description: 'Temp, humidity sensor',
     value: '',
-    rooms: [ROOMS.KITCHEN, ROOMS.DINNING_ROOM, ROOMS.LIVING_ROOM]
+    rooms: [ROOMS.MAIN_ROOM],
   }
 ];
 
@@ -66,7 +66,20 @@ function updateBooleanSensor(sensor, value) {
  * @param {*} value Value gathered from sensor
  */
 function updateValueSensor(sensor, value) {
-  
+  sensor.value = value;
+  if (sensor.rooms.length <= 0) {
+    return;
+  }
+
+  sensor.rooms.forEach(room => {
+    updateRoomData(room, (data) => {
+      data[`sensor-${sensor.id}`] = {
+        id: sensor.id,
+        value: value,
+        description: sensor.description
+      };
+    });
+  });
 }
 
 exports.updateSensor = updateSensor;
