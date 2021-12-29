@@ -53,9 +53,12 @@ app.post('/manual-control', (request, response) => {
   if (device) {
     // Avoid changing value type devices to manual mode for now
     device.manual = request.body.manual && device.type !== 'value';
-    manualTrigger(device, request.body.value);
+    manualTrigger(device, request.body.value).then(value => {
+      response.send(true);
+    }).catch(reason => {
+      response.send(false);
+    });
   }
-  response.send(true);
 });
 
 app.get('/get-daily-events', (request, response) => {

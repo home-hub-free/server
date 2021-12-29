@@ -31,7 +31,10 @@ function log(type, texts) {
   texts.forEach((val) => {
     display += ' ' + val + ' ';
   });
-  console.log(moment(new Date()).format('LLL'), type, display);
+
+  let value = moment(new Date()).format('LLL') + ' ' + type + ' ' + display;
+  console.log(value);
+  return value;
 }
 
 function block(type) {

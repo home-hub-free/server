@@ -138,26 +138,27 @@ function autoTrigger(device, value) {
  * @param {any} value Value that is being used to trigger the device
  */
 function manualTrigger(device, value) {
-  switch (device.type) {
-    case 'boolean':
-      notifyDeviceValue(device, 'toggle', value);
-      break;
-    case 'value':
-      notifyDeviceValue(device, 'set', value);
-      break;
-  }
+  let endpoints = {
+    boolean: 'toggle',
+    value: 'set'
+  };
+
+  return notifyDeviceValue(device, endpoints[device.type], value);
 }
 
 function notifyDeviceValue(device, endpoint, value) {
-  if (!device.ip) {
-    log(EVENT_TYPES.error, ['Device without IP address:', device.name])
-    return;
-  }
-  axios.get(`http://${device.ip}/${endpoint}?value=${value}`).then(() => {
-    device.value = value;
-    storeDeviceValue(device);
-  }).catch((error) => {
-    log(EVENT_TYPES.error, [`Device not found 404, ${device.name}`, error.message]);
+  return new Promise((resolve, reject) => {
+    if (!device.ip) {
+      reject(log(EVENT_TYPES.error, ['Device without IP address:', device.name]));
+      return;
+    }
+    axios.get(`http://${device.ip}/${endpoint}?value=${value}`).then(() => {
+      device.value = value;
+      storeDeviceValue(device);
+      resolve(value);
+    }).catch((error) => {
+      reject(log(EVENT_TYPES.error, [`Device not found 404, ${device.name}`, error.message]));
+    });
   });
 }
 
