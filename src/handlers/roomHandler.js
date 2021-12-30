@@ -63,13 +63,14 @@ function updateRoomState(room, value) {
     clearTimeout(roomState.timer);
     log(EVENT_TYPES.timer_reset, [room]);
   } else {
+    roomState.active = true;
     roomState.onActive();
     log(EVENT_TYPES.room_active, [room]);
   }
 
   // Set the timer for this room
   roomState.timer = setTimeout(() => {
-    roomState.state = true;
+    roomState.active = false;
     roomState.timer = null;
     roomState.onInactive();
     log(EVENT_TYPES.room_innactive, [room]);

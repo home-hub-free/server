@@ -28,6 +28,13 @@ const sensors = [
     description: 'Temp, humidity sensor',
     value: '',
     rooms: [ROOMS.MAIN_ROOM],
+  },
+  {
+    id: 5,
+    type: 'value',
+    description: 'Temp, humidity sensor',
+    value: '',
+    rooms: [ROOMS.KITCHEN, ROOMS.DINNING_ROOM, ROOMS.LIVING_ROOM]
   }
 ];
 

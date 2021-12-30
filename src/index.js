@@ -18,12 +18,14 @@ const {
 
 const { log, EVENT_TYPES } = require('./logger');
 const { getRoomsStates } = require('./handlers/roomHandler');
+const { initLocalSensors } = require('./local-sensors');
 
 const app = express();
 const PORT = 8080;
 
 getTodayWeather();
 initDailyDevices();
+initLocalSensors();
 
 app.use(express.json());
 app.use(cors());
