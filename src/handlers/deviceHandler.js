@@ -79,11 +79,12 @@ const devices = [
 ];
 
 function initDailyDevices() {
-  setSunriseEvent('Open living room blinds at 60%', () => {
+  let val = 60;
+  setSunriseEvent(`Open living room blinds at ${val}%`, () => {
     let blindsRight = devices.find(device => device.id === 3);
     let blindsLeft = devices.find(device => device.id === 4);
-    autoTrigger(blindsRight, '60');
-    autoTrigger(blindsLeft, '60');
+    autoTrigger(blindsRight, val);
+    autoTrigger(blindsLeft, val);
   });
 
   setSunsetEvent('Close living room blinds', () => {
