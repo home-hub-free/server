@@ -68,6 +68,7 @@ export const devices = [
     triggerCondition: (value) => {
       let sunset = dailyEvents['sunset'].time;
       let now = new Date().getTime();
+
       if (value) {
         return now > addHoursToTimestamp(sunset, -1);
       }
@@ -78,11 +79,12 @@ export const devices = [
 ];
 
 export function initDailyDevices() {
-  setSunriseEvent('Open living room blinds at 60%', () => {
+  let val = 60;
+  setSunriseEvent(`Open living room blinds at ${val}%`, () => {
     let blindsRight = devices.find(device => device.id === 3);
     let blindsLeft = devices.find(device => device.id === 4);
-    autoTrigger(blindsRight, '60');
-    autoTrigger(blindsLeft, '60');
+    autoTrigger(blindsRight, val);
+    autoTrigger(blindsLeft, val);
   });
 
   setSunsetEvent('Close living room blinds', () => {
