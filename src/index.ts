@@ -30,7 +30,7 @@ const PORT = 8080;
 
 getTodayWeather();
 initDailyDevices();
-// initLocalSensors();
+initLocalSensors();
 
 app.use(express.json());
 app.use(cors());
