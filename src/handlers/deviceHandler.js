@@ -67,11 +67,10 @@ const devices = [
     value: false,
     triggerCondition: (value) => {
       let sunset = dailyEvents['sunset'].time;
-      addHoursToTimestamp(sunset, -1);
       let now = new Date().getTime();
 
       if (value) {
-        return now > sunset;
+        return now > addHoursToTimestamp(sunset, -1);
       }
       return true;
     },

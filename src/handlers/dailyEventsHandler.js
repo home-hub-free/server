@@ -95,15 +95,15 @@ function getDailyEvents() {
 }
 
 function addHoursToTimestamp(timestamp, hours) {
-  timestamp = new Date(timestamp.getTime() + addMinutesToTimestamp(timestamp, hours * 60));
+  return addMinutesToTimestamp(timestamp, hours * 60);
 }
 
 function addMinutesToTimestamp(timestamp, minutes) {
-  timestamp = new Date(timestamp.getTime() + addSecondsToTimestamp(timestamp, minutes * 60))
+  return addSecondsToTimestamp(timestamp, minutes * 60);
 }
 
 function addSecondsToTimestamp(timestamp, seconds) {
-  timestamp = new Date(timestamp.getTime() + seconds * 1000);
+  return new Date(timestamp.getTime() + (seconds * 1000));
 }
 
 function cleanup() {
