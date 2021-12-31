@@ -94,15 +94,15 @@ export function getDailyEvents() {
   });
 }
 
-export function addHoursToTimestamp(timestamp, hours) {
+export function addHoursToTimestamp(timestamp: Date, hours: number): Date {
   return addMinutesToTimestamp(timestamp, hours * 60);
 }
 
-function addMinutesToTimestamp(timestamp, minutes) {
+function addMinutesToTimestamp(timestamp: Date, minutes: number): Date {
   return addSecondsToTimestamp(timestamp, minutes * 60);
 }
 
-function addSecondsToTimestamp(timestamp, seconds) {
+function addSecondsToTimestamp(timestamp: Date, seconds: number): Date {
   return new Date(timestamp.getTime() + (seconds * 1000));
 }
 

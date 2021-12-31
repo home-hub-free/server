@@ -1,81 +1,37 @@
-const axios = require('axios');
-const storage = require('node-persist');
-const { log, EVENT_TYPES } = require('../logger');
-const { 
+import axios from 'axios';
+import storage from 'node-persist';
+import { log, EVENT_TYPES } from '../logger';
+import { Device } from './device.class';
+import {
   setSunriseEvent,
   setSunsetEvent,
-  // isPastSunset,
   dailyEvents,
   addHoursToTimestamp
-} = require('./dailyEventsHandler');
+} from './dailyEventsHandler';
 
-storage.init({
-  dir: './data',
-  stringify: JSON.stringify,
-  parse: JSON.parse,
-  encoding: 'utf8',
-  logging: false,  // can also be custom logging function
-  ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
-  expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
-  // in some cases, you (or some other service) might add non-valid storage files to your
-  // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
-  forgiveParseErrors: false
-});
+export const devices: Device[] = [
+  new Device(1, 'Kitchen lights (down)', 'boolean'),
+  new Device(2, 'Kitchen lights (up)', 'boolean', (value) => {
+    let blindsRight = devices.find(device => device.id === 3);
+    let blindsLeft = devices.find(device => device.id === 4);
+    let sum = parseInt(blindsRight.value) + parseInt(blindsLeft.value);
+    let hour = new Date().getHours();
+    if (value) {
+      return hour > 6 && sum < 60;
+    }
+    return true;
+  }),
+  new Device(3, 'Livingroom blinds (right)', 'value'),
+  new Device(4, 'Livingroom blinds (left)', 'value'),
+  new Device(5, 'Dinning/Living room lamp', 'boolean', (value) => {
+    let sunset = dailyEvents['sunset'].time;
+    let now = new Date().getTime();
 
-export const devices = [
-  {
-    id: 1,
-    name: 'Kitchen lights (down)',
-    type: 'boolean',
-    ip: null
-  },
-  {
-    id: 2,
-    name: 'Kitchen lights (up)',
-    type: 'boolean',
-    value: false,
-    triggerCondition: (value) => {
-      let blindsRight = devices.find(device => device.id === 3);
-      let blindsLeft = devices.find(device => device.id === 4);
-      let sum = parseInt(blindsRight.value) + parseInt(blindsLeft.value);
-      let hour = new Date().getHours();
-      if (value) {
-        return hour > 6 && sum < 60;
-      }
-      return true;
-    },
-    ip: null
-  },
-  {
-    id: 3,
-    name: 'Livingroom blinds (right)',
-    type: 'value',
-    value: 0,
-    ip: null
-  },
-  {
-    id: 4,
-    name: 'Livingroom blinds (left)',
-    type: 'value',
-    value: 0,
-    ip: null
-  },
-  {
-    id: 5,
-    name:'Dinningroom/Livingroom lamp',
-    type: 'boolean',
-    value: false,
-    triggerCondition: (value) => {
-      let sunset = dailyEvents['sunset'].time;
-      let now = new Date().getTime();
-
-      if (value) {
-        return now > addHoursToTimestamp(sunset, -1);
-      }
-      return true;
-    },
-    ip: null
-  }
+    if (value) {
+      return now > addHoursToTimestamp(sunset, -1).getTime();
+    }
+    return true;
+  }),
 ];
 
 export function initDailyDevices() {
@@ -131,8 +87,11 @@ export function autoTrigger(device, value) {
   // Avoid trigger overall if the value is still the same, this to save server requests
   if (String(value) === String(device.value)) return;
 
-  manualTrigger(device, value);
-  log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
+  return manualTrigger(device, value).then(() => {
+    log(EVENT_TYPES.device_triggered, [device.id, device.name, value]);
+  }).catch((err) => {
+    log(EVENT_TYPES.error, [err]);
+  });
 }
 
 /**
@@ -154,7 +113,7 @@ export function manualTrigger(device, value) {
 function notifyDeviceValue(device, endpoint, value) {
   return new Promise((resolve, reject) => {
     if (!device.ip) {
-      reject(log(EVENT_TYPES.error, ['Device without IP address:', device.name]));
+      reject(`Device without IP address: ${device.name}`);
       return;
     }
     axios.get(`http://${device.ip}/${endpoint}?value=${value}`).then(() => {
@@ -162,7 +121,7 @@ function notifyDeviceValue(device, endpoint, value) {
       storeDeviceValue(device);
       resolve(value);
     }).catch((error) => {
-      reject(log(EVENT_TYPES.error, [`Device not found 404, ${device.name}`, error.message]));
+      reject(`Device not found 404, ${device.name} ${error.message}`);
     });
   });
 }

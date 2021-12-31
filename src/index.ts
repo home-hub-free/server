@@ -1,6 +1,10 @@
 import express, { Express } from 'express';
 import cors from 'cors';
+import storage from 'node-persist';
 import { updateSensor } from './handlers/sensorHandler';
+import { getRoomsStates } from './handlers/roomHandler';
+import { initLocalSensors } from './local-sensors';
+import { log, EVENT_TYPES } from './logger';
 import {
   assignDeviceIpAddress,
   autoTrigger,
@@ -14,19 +18,22 @@ import {
   addDailyEvent,
   getDailyEvents
 } from './handlers/dailyEventsHandler';
-import {
-  log,
-  EVENT_TYPES
-} from './logger';
-import {
-  getRoomsStates
-} from './handlers/roomHandler';
-import {
-  initLocalSensors
-} from './local-sensors';
 
 const app: Express = express();
 const PORT = 8080;
+
+storage.init({
+  dir: './data',
+  stringify: JSON.stringify,
+  parse: JSON.parse,
+  encoding: 'utf8',
+  logging: false,  // can also be custom logging function
+  ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
+  expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
+  // in some cases, you (or some other service) might add non-valid storage files to your
+  // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
+  forgiveParseErrors: false
+});
 
 getTodayWeather();
 initDailyDevices();

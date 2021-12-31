@@ -10,6 +10,10 @@ let tempSensor = {
 
 
 export function initLocalSensors() {
+  if (process.env.USER !== 'pi') {
+    return;
+  }
+
   updateSensors();
   setInterval(() => {
     updateSensors();
