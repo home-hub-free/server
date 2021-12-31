@@ -38,8 +38,29 @@ let activeStates = {
     active: false,
     timer: null,
     data: {},
-    onActive: () => autoTrigger(devices[4], true),
-    onInactive: () => autoTrigger(devices[4], false)
+    onActive: () => {
+      let dinningLamp = devices[4];
+      let kitchenLightsDown = devices[0];
+      let now = new Date();
+      let hour = now.getHours();
+      autoTrigger(dinningLamp, true);
+      // Is past 12am and before 6am
+      if (hour < 6) {
+        autoTrigger(kitchenLightsDown, true);
+      }
+    },
+    onInactive: () => {
+      // autoTrigger(devices[4], false);
+      let dinningLamp = devices[4];
+      let kitchenLightsDown = devices[0];
+      let now = new Date();
+      let hour = now.getHours();
+      autoTrigger(dinningLamp, false);
+      // Is past 12am and before 6am
+      if (hour < 6) {
+        autoTrigger(kitchenLightsDown, false);
+      }
+    }
   },
   [ROOMS.MAIN_ROOM]: {
     active: false,

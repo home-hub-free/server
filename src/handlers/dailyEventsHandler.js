@@ -128,4 +128,5 @@ exports.getDailyEvents = getDailyEvents;
 exports.getTodayWeather = getTodayWeather;
 exports.addDailyEvent = addDailyEvent;
 exports.isPastSunset = isPastSunset;
+exports.addHoursToTimestamp = addHoursToTimestamp;
 exports.dailyEvents = dailyEvents;

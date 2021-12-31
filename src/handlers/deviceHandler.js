@@ -4,7 +4,9 @@ const { log, EVENT_TYPES } = require('../logger');
 const { 
   setSunriseEvent,
   setSunsetEvent,
-  isPastSunset
+  // isPastSunset,
+  dailyEvents,
+  addHoursToTimestamp
 } = require('./dailyEventsHandler');
 
 storage.init({
@@ -25,7 +27,6 @@ const devices = [
     id: 1,
     name: 'Kitchen lights (down)',
     type: 'boolean',
-    // triggerCondition: (value) => true,
     ip: null
   },
   {
@@ -65,8 +66,10 @@ const devices = [
     type: 'boolean',
     value: false,
     triggerCondition: (value) => {
+      let sunset = dailyEvents['sunset'].time;
+      let now = new Date().getTime();
       if (value) {
-        return isPastSunset();
+        return now > addHoursToTimestamp(sunset, -1);
       }
       return true;
     },
@@ -78,8 +81,8 @@ function initDailyDevices() {
   setSunriseEvent('Open living room blinds at 60%', () => {
     let blindsRight = devices.find(device => device.id === 3);
     let blindsLeft = devices.find(device => device.id === 4);
-    autoTrigger(blindsRight, '40');
-    autoTrigger(blindsLeft, '40');
+    autoTrigger(blindsRight, '60');
+    autoTrigger(blindsLeft, '60');
   });
 
   setSunsetEvent('Close living room blinds', () => {

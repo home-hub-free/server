@@ -25,14 +25,14 @@ const sensors = [
   {
     id: 4,
     type: 'value',
-    description: 'Temp, humidity sensor',
+    description: 'Temp/humidity',
     value: '',
     rooms: [ROOMS.MAIN_ROOM],
   },
   {
     id: 5,
     type: 'value',
-    description: 'Temp, humidity sensor',
+    description: 'Temp/humidity',
     value: '',
     rooms: [ROOMS.KITCHEN, ROOMS.DINNING_ROOM]
   }
