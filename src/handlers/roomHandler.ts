@@ -10,7 +10,7 @@ const ROOMS = {
   MAIN_BATHROOM: 'main-bathroom'
 };
 
-let activeStates = {
+export let activeStates: any = {
   [ROOMS.KITCHEN]: {
     active: false,
     timer: null,
@@ -71,7 +71,7 @@ let activeStates = {
   }
 };
 
-function updateRoomState(room, value) {
+export function updateRoomState(room, value) {
   if (!activeStates[room] || !value) {
     return;
   }
@@ -98,24 +98,11 @@ function updateRoomState(room, value) {
   }, TIMER);
 }
 
-function updateRoomData(room, cb) {
+export function updateRoomData(room, cb) {
   cb(activeStates[room].data);
 }
 
-// Deprecated
-// function checkTriggers(roomState, value) {
-//   if (!(roomState.triggerOnActive && roomState.triggerOnActive.length > 0)) {
-//     return;
-//   }
-
-//   let triggers = roomState.triggerOnActive;
-//   triggers.forEach(id => {
-//     let device = devices.find((device) => device.id == id);
-//     if (device) autoTrigger(device, value);
-//   });
-// }
-
-function getRoomsStates() {
+export function getRoomsStates() {
   return Object.keys(activeStates).map(key => {
     let state = activeStates[key];
     return {

@@ -9,7 +9,7 @@ let tempSensor = {
 };
 
 
-function initLocalSensors() {
+export function initLocalSensors() {
   updateSensors();
   setInterval(() => {
     updateSensors();
@@ -21,5 +21,3 @@ function updateSensors() {
   let value = parseFloat(readOut.temperature) + ':' + parseFloat(readOut.humidity);
   updateSensor(tempSensor.id, value);
 }
-
-exports.initLocalSensors = initLocalSensors;

@@ -1,6 +1,6 @@
 const moment = require('moment');
 
-const EVENT_TYPES = {
+export const EVENT_TYPES = {
   daily_event: '[DAILY EVENT]',
   device_detected: '[DEVICE DETECTED]',
   device_triggered: '[DEVICE TRIGGERED]',
@@ -22,7 +22,7 @@ const blockedLogs = [
 ];
 
 // Used just to make sure we log 100% text and not objects
-function log(type, texts) {
+export function log(type, texts) {
   if (block(type)) {
     return;
   }
@@ -40,6 +40,3 @@ function log(type, texts) {
 function block(type) {
   return blockedLogs.indexOf(type) > -1;
 }
-
-exports.log = log;
-exports.EVENT_TYPES = EVENT_TYPES;

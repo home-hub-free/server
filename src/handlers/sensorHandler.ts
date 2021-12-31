@@ -38,7 +38,7 @@ const sensors = [
   }
 ];
 
-function updateSensor(sensorId, value) {
+export function updateSensor(sensorId, value) {
   let sensor = sensors.find(sensor => sensor.id === sensorId);
   if (!sensor) return;
 
@@ -88,5 +88,3 @@ function updateValueSensor(sensor, value) {
     });
   });
 }
-
-exports.updateSensor = updateSensor;

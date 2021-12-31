@@ -1,31 +1,36 @@
-const express = require('express');
-const cors = require('cors');
-const { updateSensor } = require('./handlers/sensorHandler');
-const { 
+import express, { Express } from 'express';
+import cors from 'cors';
+import { updateSensor } from './handlers/sensorHandler';
+import {
   assignDeviceIpAddress,
   autoTrigger,
   manualTrigger,
   devices,
   getDevices,
   initDailyDevices
-} = require('./handlers/deviceHandler');
-
-const {
+} from './handlers/deviceHandler';
+import {
   getTodayWeather,
   addDailyEvent,
   getDailyEvents
-} = require('./handlers/dailyEventsHandler');
+} from './handlers/dailyEventsHandler';
+import {
+  log,
+  EVENT_TYPES
+} from './logger';
+import {
+  getRoomsStates
+} from './handlers/roomHandler';
+import {
+  initLocalSensors
+} from './local-sensors';
 
-const { log, EVENT_TYPES } = require('./logger');
-const { getRoomsStates } = require('./handlers/roomHandler');
-const { initLocalSensors } = require('./local-sensors');
-
-const app = express();
+const app: Express = express();
 const PORT = 8080;
 
 getTodayWeather();
 initDailyDevices();
-initLocalSensors();
+// initLocalSensors();
 
 app.use(express.json());
 app.use(cors());
@@ -79,7 +84,7 @@ app.post('/set-daily-event', (request, response) => {
     let device = devices.find((device) => device.id === deviceId);
     if (device) {
       addDailyEvent(name, date, () => {
-        autoTrigger(device, value, true);
+        autoTrigger(device, value);
       });
       response.send(true);
     } else {

@@ -22,7 +22,7 @@ storage.init({
   forgiveParseErrors: false
 });
 
-const devices = [
+export const devices = [
   {
     id: 1,
     name: 'Kitchen lights (down)',
@@ -77,7 +77,7 @@ const devices = [
   }
 ];
 
-function initDailyDevices() {
+export function initDailyDevices() {
   setSunriseEvent('Open living room blinds at 60%', () => {
     let blindsRight = devices.find(device => device.id === 3);
     let blindsLeft = devices.find(device => device.id === 4);
@@ -93,7 +93,7 @@ function initDailyDevices() {
   });
 }
 
-function assignDeviceIpAddress(deviceId, address) {
+export function assignDeviceIpAddress(deviceId, address) {
   let device = devices.find((device) => device.id == deviceId);
   let chunks = address.split(':');
   let ip = chunks[chunks.length - 1];
@@ -115,7 +115,7 @@ function assignDeviceIpAddress(deviceId, address) {
  * @param {any} value Value that is being used to trigger the device
  * @param {boolean} force force trigger, ignoring triggerConditions
  */
-function autoTrigger(device, value) {
+export function autoTrigger(device, value) {
   // Avoid triggering if device is in manual mode
   if (device.manual) {
     return;
@@ -140,7 +140,7 @@ function autoTrigger(device, value) {
  * @param {Object} device Device object to trigger
  * @param {any} value Value that is being used to trigger the device
  */
-function manualTrigger(device, value) {
+export function manualTrigger(device, value) {
   let endpoints = {
     boolean: 'toggle',
     value: 'set'
@@ -165,8 +165,8 @@ function notifyDeviceValue(device, endpoint, value) {
   });
 }
 
-function getDevices() {
-  return Object.values(devices).map((device) => {
+export function getDevices() {
+  return Object.values(devices).map((device: any) => {
     return {
       id: device.id,
       name: device.name,
@@ -194,10 +194,3 @@ function assignDeviceValue(device) {
     log(EVENT_TYPES.init_value, [id, device.name, value]);
   });
 }
-
-exports.assignDeviceIpAddress = assignDeviceIpAddress;
-exports.autoTrigger = autoTrigger;
-exports.getDevices = getDevices;
-exports.manualTrigger = manualTrigger;
-exports.initDailyDevices = initDailyDevices;
-exports.devices = devices;

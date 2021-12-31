@@ -3,7 +3,7 @@ const moment = require('moment');
 const schedule = require('node-schedule');
 const { log, EVENT_TYPES } = require('../logger');
 
-let dailyEvents = {
+export let dailyEvents: any = {
   sunrise: {},
   sunset: {}
 };
@@ -12,16 +12,16 @@ const atSunrise = [];
 const atSunset = [];
 
 var rule = new schedule.RecurrenceRule();
-rule.hour = 00;
-rule.minute = 05;
-rule.second = 00;
+rule.hour = 0;
+rule.minute = 5;
+rule.second = 0;
 rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
   cleanup();
   getTodayWeather();
 });
 
-function addDailyEvent(name, time, execution) {
+export function addDailyEvent(name, time, execution) {
   if (!dailyEvents[name]) {
     dailyEvents[name] = {}
   };
@@ -30,25 +30,25 @@ function addDailyEvent(name, time, execution) {
   dailyEvents[name].job = schedule.scheduleJob(time, () => execution());
 }
 
-function setSunriseEvent(description, fn) {
-  if (fn && description) {
+export function setSunriseEvent(desc, fn) {
+  if (fn && desc) {
     atSunrise.push({
       fn: fn,
-      description: description
+      description: desc
     });
   };
 }
 
-function setSunsetEvent(description, fn) {
-  if (fn && description) {
+export function setSunsetEvent(desc, fn) {
+  if (fn && desc) {
     atSunset.push({
       fn: fn,
-      description, description
+      description: desc
     });
   };
 }
 
-function getTodayWeather() {
+export function getTodayWeather() {
   const coords = {
     lat: 20.6064818,
     lng: -100.4898658
@@ -81,7 +81,7 @@ function getTodayWeather() {
     });
 }
 
-function getDailyEvents() {
+export function getDailyEvents() {
   return Object.keys(dailyEvents).map((key) => {
     let event = dailyEvents[key];
     let eventData = {
@@ -94,7 +94,7 @@ function getDailyEvents() {
   });
 }
 
-function addHoursToTimestamp(timestamp, hours) {
+export function addHoursToTimestamp(timestamp, hours) {
   timestamp = new Date(timestamp.getTime() + addMinutesToTimestamp(timestamp, hours * 60));
 }
 
@@ -113,7 +113,7 @@ function cleanup() {
   };
 }
 
-function isPastSunset() {
+export function isPastSunset() {
   let now = new Date().getTime();
   let sunset = dailyEvents['sunset'].time;
   if (sunset) {
@@ -121,12 +121,3 @@ function isPastSunset() {
   }
   return null;
 }
-
-exports.setSunriseEvent = setSunriseEvent;
-exports.setSunsetEvent = setSunsetEvent;
-exports.getDailyEvents = getDailyEvents;
-exports.getTodayWeather = getTodayWeather;
-exports.addDailyEvent = addDailyEvent;
-exports.isPastSunset = isPastSunset;
-exports.addHoursToTimestamp = addHoursToTimestamp;
-exports.dailyEvents = dailyEvents;
