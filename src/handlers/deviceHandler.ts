@@ -34,6 +34,21 @@ export const devices: Device[] = [
   }),
 ];
 
+export function randomLights() {
+  console.log(devices);
+  let lights = [devices[0], devices[1], devices[4]];
+
+  setInterval(() => {
+    lights.forEach((light) => {
+      light.manual = true;
+      manualTrigger(light, true);
+      setTimeout(() => {
+        manualTrigger(light, false);
+      }, 100 * (Math.floor(Math.random() * (5 - 1 + 1) + 1)));
+    });
+  }, 800);
+}
+
 export function initDailyDevices() {
   let val = 60;
   setSunriseEvent(`Open living room blinds at ${val}%`, () => {
