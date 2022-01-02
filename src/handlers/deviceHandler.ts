@@ -1,7 +1,7 @@
 import axios from 'axios';
 import storage from 'node-persist';
 import { log, EVENT_TYPES } from '../logger';
-import { Device } from './device.class';
+import { Device } from '../classes/device.class';
 import {
   setSunriseEvent,
   setSunsetEvent,
@@ -83,7 +83,9 @@ export function assignDeviceIpAddress(deviceId, address) {
 }
 
 /**
- * Triggers devices based on external behavior, from sensors or daily events.
+ * Triggers devices based on external behavior, from sensors or daily events. This
+ * function will check for device trigger conditions before actually triggering
+ * the device
  * @param {Object} device Device object to trigger
  * @param {any} value Value that is being used to trigger the device
  * @param {boolean} force force trigger, ignoring triggerConditions
@@ -112,7 +114,7 @@ export function autoTrigger(device, value) {
 /**
  * Triggers a device based on more direct interactions that involve user
  * interactions. This type of trigger will be direct and have no conditions
- * attatch to it
+ * attatched to it
  * @param {Object} device Device object to trigger
  * @param {any} value Value that is being used to trigger the device
  */

@@ -1,4 +1,5 @@
-const { updateRoomState, ROOMS, updateRoomData } = require('./roomHandler');
+import { ROOMS } from '../classes/room.class';
+import { updateRoomData, roomList } from "./roomHandler";
 
 const sensors = [
   {
@@ -61,7 +62,7 @@ function updateBooleanSensor(sensor, value) {
   // This sensor is related to rooms
   if(sensor.rooms.length > 0) {
     sensor.rooms.forEach(room => {
-      updateRoomState(room, sensor.value);
+      roomList[room] ? roomList[room].sensorSignal(sensor.value) : null;
     });
   }
 }

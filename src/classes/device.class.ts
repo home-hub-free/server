@@ -8,6 +8,7 @@ export class Device {
     public name: string,
     public type: 'boolean' | 'value',
     triggerCondition?: (value: any) => boolean) {
+
     switch (type) {
       case 'boolean':
         this.value = false;

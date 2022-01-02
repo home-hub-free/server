@@ -1,141 +1,51 @@
-const { autoTrigger, devices } = require('./deviceHandler');
-const { log, EVENT_TYPES } = require('../logger');
-const TIMER = 1000 * 60;
+import { autoTrigger, devices } from './deviceHandler';
+import { 
+  RoomKeys,
+  Room,
+  RoomList
+} from '../classes/room.class';
 
-const ROOMS = {
-  LIVING_ROOM: 'living-room',
-  DINNING_ROOM: 'dinning-room',
-  KITCHEN: 'kitchen',
-  MAIN_ROOM: 'main-room',
-  MAIN_BATHROOM: 'main-bathroom'
+// Defining rooms
+let kitchen = new Room('kitchen', {
+  'kitchen-light-down': devices[0],
+  'kitchen-light-up': devices[1]
+});
+let dinningRoom = new Room('dinning-room', {
+  'kitchen-light-down': devices[0],
+  'dinning-lamp': devices[4]
+}, 1000 * 60 * 2);
+let mainRoom = new Room('main-room');
+
+// Defining rooms behavior
+['active', 'inactive'].forEach((event: 'active' | 'inactive') => {
+  kitchen.on(event, (devices, value) => {
+    Object.values(devices).forEach(device => autoTrigger(device, value));
+  });
+
+  dinningRoom.on(event, (devices, value) => {
+    autoTrigger(devices['dinning-lamp'], true);
+    // Is past 12am and before 6am
+    if (new Date().getHours() < 6) autoTrigger(devices['kitchen-light-down'], value);
+  });
+});
+
+export let roomList: RoomList = {
+  'kitchen': kitchen,
+  'dinning-room': dinningRoom,
+  'main-room': mainRoom
 };
-
-export let activeStates: any = {
-  [ROOMS.KITCHEN]: {
-    active: false,
-    timer: null,
-    data: {},
-    onActive: () => {
-      [devices[0], devices[1]].forEach(lights => {
-        autoTrigger(lights, true);
-      });
-    },
-    onInactive: () => {
-      [devices[0], devices[1]].forEach(lights => {
-        autoTrigger(lights, false);
-      });
-    }
-  },
-  [ROOMS.DINNING_ROOM]: {
-    active: false,
-    timer: null,
-    data: {},
-    onActive: () => {
-      let dinningLamp = devices[4];
-      let kitchenLightsDown = devices[0];
-      let now = new Date();
-      let hour = now.getHours();
-      autoTrigger(dinningLamp, true);
-      // Is past 12am and before 6am
-      if (hour < 6) {
-        autoTrigger(kitchenLightsDown, true);
-      }
-    },
-    onInactive: () => {
-      // autoTrigger(devices[4], false);
-      let dinningLamp = devices[4];
-      let kitchenLightsDown = devices[0];
-      let now = new Date();
-      let hour = now.getHours();
-      autoTrigger(dinningLamp, false);
-      // Is past 12am and before 6am
-      if (hour < 6) {
-        autoTrigger(kitchenLightsDown, false);
-      }
-    }
-    
-  },
-  [ROOMS.LIVING_ROOM]: {
-    active: false,
-    timer: null,
-    data: {},
-    onActive: () => {
-      // let dinningLamp = devices[4];
-      // let kitchenLightsDown = devices[0];
-      // let now = new Date();
-      // let hour = now.getHours();
-      // autoTrigger(dinningLamp, true);
-      // // Is past 12am and before 6am
-      // if (hour < 6) {
-      //   autoTrigger(kitchenLightsDown, true);
-      // }
-    },
-    onInactive: () => {
-      // autoTrigger(devices[4], false);
-      // let dinningLamp = devices[4];
-      // let kitchenLightsDown = devices[0];
-      // let now = new Date();
-      // let hour = now.getHours();
-      // autoTrigger(dinningLamp, false);
-      // // Is past 12am and before 6am
-      // if (hour < 6) {
-      //   autoTrigger(kitchenLightsDown, false);
-      // }
-    }
-  },
-  [ROOMS.MAIN_ROOM]: {
-    active: false,
-    timer: null,
-    data: {},
-    onActive: () => {},
-    onInactive: () => {}
-  }
-};
-
-export function updateRoomState(room, value) {
-  if (!activeStates[room] || !value) {
-    return;
-  }
-
-  let roomState = activeStates[room]
-  // This room is now active
-  roomState.state = true;
-  // Check if a timer already exists
-  if (roomState.timer) {
-    clearTimeout(roomState.timer);
-    log(EVENT_TYPES.timer_reset, [room]);
-  } else {
-    roomState.active = true;
-    roomState.onActive();
-    log(EVENT_TYPES.room_active, [room]);
-  }
-
-  // Set the timer for this room
-  roomState.timer = setTimeout(() => {
-    roomState.active = false;
-    roomState.timer = null;
-    roomState.onInactive();
-    log(EVENT_TYPES.room_innactive, [room]);
-  }, TIMER);
-}
 
 export function updateRoomData(room, cb) {
-  cb(activeStates[room].data);
+  cb(roomList[room].data);
 }
 
 export function getRoomsStates() {
-  return Object.keys(activeStates).map(key => {
-    let state = activeStates[key];
+  return Object.keys(roomList).map((key: RoomKeys) => {
+    let room = roomList[key];
     return {
       room: key,
-      active: state.active,
-      data: state.data
+      active: room.active,
+      data: room.data
     };
   });
 }
-
-exports.ROOMS = ROOMS;
-exports.activeStates = activeStates;
-exports.updateRoomState = updateRoomState;
-exports.updateRoomData = updateRoomData;
-exports.getRoomsStates = getRoomsStates;
