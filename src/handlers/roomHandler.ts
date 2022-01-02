@@ -35,10 +35,6 @@ export let roomList: RoomList = {
   'main-room': mainRoom
 };
 
-export function updateRoomData(room, cb) {
-  cb(roomList[room].data);
-}
-
 export function getRoomsStates() {
   return Object.keys(roomList).map((key: RoomKeys) => {
     let room = roomList[key];

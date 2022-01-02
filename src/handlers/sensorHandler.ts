@@ -1,5 +1,5 @@
-import { ROOMS } from '../classes/room.class';
-import { updateRoomData, roomList } from "./roomHandler";
+import { RoomKeys, ROOMS } from '../classes/room.class';
+import { roomList } from "./roomHandler";
 
 const sensors = [
   {
@@ -79,13 +79,15 @@ function updateValueSensor(sensor, value) {
     return;
   }
 
-  sensor.rooms.forEach(room => {
-    updateRoomData(room, (data) => {
-      data[`sensor-${sensor.id}`] = {
-        id: sensor.id,
-        value: value,
-        description: sensor.description
-      };
-    });
+  sensor.rooms.forEach((room: RoomKeys) => {
+    if (roomList[room]) {
+      roomList[room].updateRoomDataRef((data) => {
+        data[`sensor-${sensor.id}`] = {
+          id: sensor.id,
+          value: value,
+          description: sensor.description
+        };
+      });
+    }
   });
 }

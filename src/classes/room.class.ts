@@ -63,4 +63,8 @@ export class Room {
       }
     }, this.timeout);
   }
+
+  updateRoomDataRef(fn: (data: any) => void) {
+    fn(this.data);
+  }
 }
