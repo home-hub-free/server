@@ -1,93 +1,20 @@
-import { RoomKeys, ROOMS } from '../classes/room.class';
+import { Room, RoomKeys, ROOMS } from '../classes/room.class';
+import { Sensor } from '../classes/sensor.class';
 import { roomList } from "./roomHandler";
 
-const sensors = [
-  {
-    id: 1,
-    type: 'boolean',
-    description: 'Motion sensor',
-    value: false,
-    rooms: [ROOMS.LIVING_ROOM],
-  },
-  {
-    id: 2,
-    type: 'boolean',
-    description: 'Motion sensor',
-    value: false,
-    rooms: [ROOMS.DINNING_ROOM],
-  },
-  {
-    id: 3,
-    type: 'boolean',
-    description: 'Motion sensor',
-    value: false,
-    rooms: [ROOMS.KITCHEN],
-  },
-  {
-    id: 4,
-    type: 'value',
-    description: 'Temp/humidity',
-    value: '',
-    rooms: [ROOMS.MAIN_ROOM],
-  },
-  {
-    id: 5,
-    type: 'value',
-    description: 'Temp/humidity',
-    value: '',
-    rooms: [ROOMS.KITCHEN, ROOMS.DINNING_ROOM]
-  }
+
+const sensors: Sensor[] = [
+  new Sensor(1, 'boolean', 'Motion sensor', [roomList['living-room']]),
+  new Sensor(2, 'boolean', 'Motion sensor', [roomList['dinning-room']]),
+  new Sensor(3, 'boolean', 'Motion sensor', [roomList.kitchen]),
+  // Values for 'value' type sensors can come formated as "valueOne:valueTwo:valueTree", the 
+  // setAs property defines how to populate those values into the data object of the rooms,
+  // leaving the value property as the "raw" value form the device
+  new Sensor(4, 'value', 'Room temp, humidity', [roomList['main-room']], ['temperature', 'humidity']),
+  new Sensor(5, 'value', 'Common area temp/humidity', [roomList.kitchen, roomList['dinning-room']], ['temperature', 'humidity'])
 ];
 
 export function updateSensor(sensorId, value) {
   let sensor = sensors.find(sensor => sensor.id === sensorId);
-  if (!sensor) return;
-
-  switch (sensor.type) {
-    case 'boolean':
-      updateBooleanSensor(sensor, value);
-      break;
-    case 'value':
-      updateValueSensor(sensor, value);
-  }
-}
-
-/**
- * Boolean sensors are only used to update active state in rooms
- * @param {*} sensor 
- * @param {boolean} value Sensor state true/false
- */
-function updateBooleanSensor(sensor, value) {
-  sensor.value = value === 1;
-  // This sensor is related to rooms
-  if(sensor.rooms.length > 0) {
-    sensor.rooms.forEach(room => {
-      roomList[room] ? roomList[room].sensorSignal(sensor.value) : null;
-    });
-  }
-}
-
-/**
- * Value sensors will be used to store data, like temp
- * humidity, light levels, 
- * @param {*} sensor 
- * @param {*} value Value gathered from sensor
- */
-function updateValueSensor(sensor, value) {
-  sensor.value = value;
-  if (sensor.rooms.length <= 0) {
-    return;
-  }
-
-  sensor.rooms.forEach((room: RoomKeys) => {
-    if (roomList[room]) {
-      roomList[room].updateRoomDataRef((data) => {
-        data[`sensor-${sensor.id}`] = {
-          id: sensor.id,
-          value: value,
-          description: sensor.description
-        };
-      });
-    }
-  });
+  if (sensor) sensor.update(value);
 }

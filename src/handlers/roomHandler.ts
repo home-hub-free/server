@@ -23,7 +23,7 @@ let mainRoom = new Room('main-room');
   });
 
   dinningRoom.on(event, (devices, value) => {
-    autoTrigger(devices['dinning-lamp'], true);
+    autoTrigger(devices['dinning-lamp'], value);
     // Is past 12am and before 6am
     if (new Date().getHours() < 6) autoTrigger(devices['kitchen-light-down'], value);
   });
