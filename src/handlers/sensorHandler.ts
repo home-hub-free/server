@@ -1,4 +1,3 @@
-import { Room, RoomKeys, ROOMS } from '../classes/room.class';
 import { Sensor } from '../classes/sensor.class';
 import { roomList } from "./roomHandler";
 
@@ -14,7 +13,7 @@ const sensors: Sensor[] = [
   new Sensor(5, 'value', 'Common area temp/humidity', [roomList.kitchen, roomList['dinning-room']], ['temperature', 'humidity'])
 ];
 
-export function updateSensor(sensorId, value) {
-  let sensor = sensors.find(sensor => sensor.id === sensorId);
+export function updateSensor(sensorId: number, value: any) {
+  let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);
   if (sensor) sensor.update(value);
 }

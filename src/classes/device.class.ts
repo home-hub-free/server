@@ -1,3 +1,16 @@
+type DeviceType = 'boolean' | 'value'
+
+export interface DeviceData {
+  id: number,
+  name: string,
+  value: any,
+  type: DeviceType,
+  manual: boolean
+}
+
+export type DeviceList = Device[];
+export type DeviceMap = { [key: string]: Device } | {}
+
 export class Device {
   public ip: string | null = null;
   public manual: boolean = false;

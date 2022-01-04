@@ -1,5 +1,5 @@
 import { log, EVENT_TYPES } from '../logger';
-import { Device } from './device.class';
+import { Device, DeviceMap } from './device.class';
 
 export const DEFAULT_TIMER = 1000 * 60;
 export const ROOMS = {
@@ -13,6 +13,14 @@ export type RoomKeys = 'living-room' |'dinning-room' |'kitchen' |'main-room' |'m
 export type RoomList = {
   [key in RoomKeys]?: Room;
 };
+export type RoomEvent = 'active' | 'signal-update' | 'inactive';
+export type RoomEventCallback = (device: DeviceMap, value: any) => void
+
+export interface RoomData {
+  room: string,
+  active: boolean,
+  data: any
+}
 
 export class Room {
 
@@ -21,7 +29,7 @@ export class Room {
   public data: any = {};
   public name: RoomKeys;
 
-  private _devices: Array<any>;
+  private _devices: DeviceMap;
   private timeout: number;
   private subscriptions = {
     'active': [],
@@ -29,17 +37,26 @@ export class Room {
     'inactive': []
   };
 
-  constructor (name: RoomKeys, devices?: any, timeout?: number) {
+  constructor (name: RoomKeys, devices?: DeviceMap, timeout?: number) {
     this.name = name;
-    this._devices = devices ? devices : [];
+    this._devices = devices || {};
     this.timeout = timeout ? timeout : DEFAULT_TIMER;
   }
 
-  on(event: 'active' | 'signal-update' | 'inactive', fn: (devices:{[key: string]: Device}, value: boolean) => void) {
+  /**
+   * Allows for multiple subscriptions to the room events
+   * @param event Event type to subscribe to
+   * @param fn Function to execute when the event is internally triggered
+   */
+  on(event: RoomEvent, fn: RoomEventCallback) {
     this.subscriptions[event].push(fn);
     return this;
   }
 
+  /**
+   * Sets  the room as active for a set amount of time, could be trough sensors or manual input
+   * @param value Singal value
+   */
   sensorSignal(value: boolean) {
     if (this.timer) {
       clearTimeout(this.timer);

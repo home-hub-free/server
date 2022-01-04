@@ -1,7 +1,7 @@
 import axios from 'axios';
 import storage from 'node-persist';
 import { log, EVENT_TYPES } from '../logger';
-import { Device } from '../classes/device.class';
+import { Device, DeviceData } from '../classes/device.class';
 import {
   setSunriseEvent,
   setSunsetEvent,
@@ -34,12 +34,15 @@ export const devices: Device[] = [
   }),
 ];
 
+/**
+ * Randomizes a list of lights to turn on and off for fun
+ */
 export function randomLights() {
   console.log(devices);
-  let lights = [devices[0], devices[1], devices[4]];
+  let lights: Device[] = [devices[0], devices[1], devices[4]];
 
   setInterval(() => {
-    lights.forEach((light) => {
+    lights.forEach((light: Device) => {
       light.manual = true;
       manualTrigger(light, true);
       setTimeout(() => {
@@ -49,6 +52,9 @@ export function randomLights() {
   }, 800);
 }
 
+/**
+ * Initializes the fixed executions of daily devices
+ */
 export function initDailyDevices() {
   let val = 60;
   setSunriseEvent(`Open living room blinds at ${val}%`, () => {
@@ -66,7 +72,13 @@ export function initDailyDevices() {
   });
 }
 
-export function assignDeviceIpAddress(deviceId, address) {
+/**
+ * takes a request and gets its ip address to store it into a device, this is
+ * to allow both server/device communication back and forth
+ * @param deviceId Device Id
+ * @param address ip address from NodeJS request
+ */
+export function assignDeviceIpAddress(deviceId: number, address: string) {
   let device = devices.find((device) => device.id == deviceId);
   let chunks = address.split(':');
   let ip = chunks[chunks.length - 1];
@@ -90,7 +102,7 @@ export function assignDeviceIpAddress(deviceId, address) {
  * @param {any} value Value that is being used to trigger the device
  * @param {boolean} force force trigger, ignoring triggerConditions
  */
-export function autoTrigger(device, value) {
+export function autoTrigger(device: Device, value: any): Promise<any> {
   // Avoid triggering if device is in manual mode
   if (device.manual) {
     return;
@@ -118,7 +130,7 @@ export function autoTrigger(device, value) {
  * @param {Object} device Device object to trigger
  * @param {any} value Value that is being used to trigger the device
  */
-export function manualTrigger(device, value) {
+export function manualTrigger(device: Device, value: any): Promise<any> {
   let endpoints = {
     boolean: 'toggle',
     value: 'set'
@@ -127,7 +139,10 @@ export function manualTrigger(device, value) {
   return notifyDeviceValue(device, endpoints[device.type], value);
 }
 
-function notifyDeviceValue(device, endpoint, value) {
+/**
+ * Notifies a device of a value change using its IP address if exists
+ */
+function notifyDeviceValue(device: Device, endpoint: string, value: any): Promise<any> {
   return new Promise((resolve, reject) => {
     if (!device.ip) {
       reject(`Device without IP address: ${device.name}`);
@@ -143,8 +158,11 @@ function notifyDeviceValue(device, endpoint, value) {
   });
 }
 
-export function getDevices() {
-  return Object.values(devices).map((device: any) => {
+/**
+ * Iterates over the devices array and return server friendly objects for each device
+ */
+export function getDevices(): DeviceData[] {
+  return Object.values(devices).map((device: Device) => {
     return {
       id: device.id,
       name: device.name,
@@ -155,7 +173,7 @@ export function getDevices() {
   });
 }
 
-function storeDeviceValue(device) {
+function storeDeviceValue(device: Device) {
   let id = JSON.stringify(device.id);
   let newValue = JSON.stringify(device.value);
   storage.getItem(id).then(value => {
@@ -165,7 +183,7 @@ function storeDeviceValue(device) {
   });
 }
 
-function assignDeviceValue(device) {
+function assignDeviceValue(device: Device) {
   let id = JSON.stringify(device.id);
   storage.getItem(id).then(value => {
     if (value) device.value = JSON.parse(value);
