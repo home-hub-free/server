@@ -7,15 +7,12 @@ import { initLocalSensors } from './local-sensors';
 import { log, EVENT_TYPES } from './logger';
 import {
   assignDeviceIpAddress,
-  autoTrigger,
-  manualTrigger,
   devices,
   getDevices,
   initDailyDevices
 } from './handlers/deviceHandler';
 import {
   getTodayWeather,
-  addDailyEvent,
   getDailyEvents
 } from './handlers/dailyEventsHandler';
 
@@ -66,10 +63,9 @@ app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
   if (device) {
     // Avoid changing value type devices to manual mode for now
-    device.manual = request.body.manual && device.type !== 'value';
-    manualTrigger(device, request.body.value).then(value => {
+    device.manualTrigger(request.body.value, request.body.manual && device.type !== 'value').then(() => {
       response.send(true);
-    }).catch(reason => {
+    }).catch(() => {
       response.send(false);
     });
   }
@@ -80,24 +76,24 @@ app.get('/get-daily-events', (request, response) => {
 });
 
 app.post('/set-daily-event', (request, response) => {
-  let name = request.body.name;
-  let description = request.body.description;
-  let deviceId = request.body.device;
-  let value = request.body.value;
-  let date = request.body.date;
-  if (!name || !description || !deviceId || !value) {
-    response.send(false);
-  } else {
-    let device = devices.find((device) => device.id === deviceId);
-    if (device) {
-      addDailyEvent(name, date, () => {
-        autoTrigger(device, value);
-      });
-      response.send(true);
-    } else {
-      response.send(false);
-    }
-  }
+  // let name = request.body.name;
+  // let description = request.body.description;
+  // let deviceId = request.body.device;
+  // let value = request.body.value;
+  // let date = request.body.date;
+  // if (!name || !description || !deviceId || !value) {
+  //   response.send(false);
+  // } else {
+  //   let device = devices.find((device) => device.id === deviceId);
+  //   if (device) {
+  //     addDailyEvent(name, date, () => {
+  //       autoTrigger(device, value);
+  //     });
+  //     response.send(true);
+  //   } else {
+  //     response.send(false);
+  //   }
+  // }
 });
 
 app.get('/get-devices', (request, response) => {

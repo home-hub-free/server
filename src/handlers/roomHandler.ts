@@ -1,8 +1,10 @@
-import { autoTrigger, devices } from './deviceHandler';
+import { devices } from './deviceHandler';
 import { 
   RoomKeys,
   Room,
-  RoomList
+  RoomList,
+  RoomEvent,
+  ServerRoom
 } from '../classes/room.class';
 
 // Defining rooms
@@ -17,31 +19,31 @@ let dinningRoom = new Room('dinning-room', {
 let mainRoom = new Room('main-room');
 
 // Defining rooms behavior
-['active', 'inactive'].forEach((event: 'active' | 'inactive') => {
+['active', 'inactive'].forEach((event: RoomEvent) => {
   kitchen.on(event, (devices, value) => {
-    Object.values(devices).forEach(device => autoTrigger(device, value));
+    Object.values(devices).forEach(device => device.autoTrigger(value));
   });
 
   dinningRoom.on(event, (devices, value) => {
-    autoTrigger(devices['dinning-lamp'], value);
-    // Is past 12am and before 6am
-    if (new Date().getHours() < 6) autoTrigger(devices['kitchen-light-down'], value);
+    devices['dinning-lamp'].autoTrigger(value);
+    if (new Date().getHours() < 6) devices['kitchen-light-down'].autoTrigger(value);
   });
 });
 
-export let roomList: RoomList = {
+export let rooms: RoomList = {
   'kitchen': kitchen,
   'dinning-room': dinningRoom,
   'main-room': mainRoom
 };
 
-export function getRoomsStates() {
-  return Object.keys(roomList).map((key: RoomKeys) => {
-    let room = roomList[key];
-    return {
+export function getRoomsStates(): ServerRoom[] {
+  return Object.keys(rooms).map((key: RoomKeys) => {
+    let room: Room = rooms[key];
+    let data: ServerRoom = {
       room: key,
       active: room.active,
       data: room.data
     };
+    return data;
   });
 }

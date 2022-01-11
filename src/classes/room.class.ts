@@ -2,16 +2,16 @@ import { log, EVENT_TYPES } from '../logger';
 import { Device } from './device.class';
 
 export const DEFAULT_TIMER = 1000 * 60;
-export const ROOMS = {
-  LIVING_ROOM: 'living-room',
-  DINNING_ROOM: 'dinning-room',
-  KITCHEN: 'kitchen',
-  MAIN_ROOM: 'main-room',
-  MAIN_BATHROOM: 'main-bathroom'
-}
 export type RoomKeys = 'living-room' |'dinning-room' |'kitchen' |'main-room' |'main-bathroom'
+export type RoomEvent = 'active' | 'signal-update' | 'inactive';
 export type RoomList = {
   [key in RoomKeys]?: Room;
+};
+
+export interface ServerRoom {
+  room: string,
+  data: any,
+  active: boolean
 };
 
 export class Room {
@@ -35,7 +35,7 @@ export class Room {
     this.timeout = timeout ? timeout : DEFAULT_TIMER;
   }
 
-  on(event: 'active' | 'signal-update' | 'inactive', fn: (devices:{[key: string]: Device}, value: boolean) => void) {
+  on(event: RoomEvent, fn: (devices:{[key: string]: Device}, value: boolean) => void) {
     this.subscriptions[event].push(fn);
     return this;
   }
