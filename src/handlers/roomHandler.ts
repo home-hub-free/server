@@ -4,7 +4,7 @@ import {
   Room,
   RoomList,
   RoomEvent,
-  ServerRoom
+  RoomData
 } from '../classes/room.class';
 
 // Defining rooms
@@ -36,14 +36,19 @@ export let rooms: RoomList = {
   'main-room': mainRoom
 };
 
-export function getRoomsStates(): ServerRoom[] {
+/**
+ * Iterates over room list object creates simples objects containing only
+ * neccesary data for the front end
+ * @returns RoomData
+ */
+export function getRoomsStates(): RoomData[] {
   return Object.keys(rooms).map((key: RoomKeys) => {
-    let room: Room = rooms[key];
-    let data: ServerRoom = {
+    let room = rooms[key];
+
+    return {
       room: key,
       active: room.active,
       data: room.data
     };
-    return data;
   });
 }

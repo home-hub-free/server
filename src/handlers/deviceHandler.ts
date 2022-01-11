@@ -1,6 +1,6 @@
 // import storage from 'node-persist';
 import { log, EVENT_TYPES } from '../logger';
-import { Device, ServerDevice } from '../classes/device.class';
+import { Device, DeviceData } from '../classes/device.class';
 import {
   setSunriseEvent,
   setSunsetEvent
@@ -36,14 +36,17 @@ export function randomLights() {
   let lights = [devices[0], devices[1], devices[4]];
   setInterval(() => {
     lights.forEach((light) => {
-      light.manualTrigger(true);
+      light.manualTrigger(true, true);
       setTimeout(() => {
-        light.manualTrigger(false);
+        light.manualTrigger(false, true);
       }, 100 * (Math.floor(Math.random() * (5 - 1 + 1) + 1)));
     });
   }, 800);
 }
 
+/**
+ * Initializes the fixed executions of daily devices
+ */
 export function initDailyDevices() {
   let val = 35;
   let blinds = devices.filter((device) => device.id === 3 || device.id === 4);
@@ -56,7 +59,13 @@ export function initDailyDevices() {
   });
 }
 
-export function assignDeviceIpAddress(deviceId, address) {
+/**
+ * takes a request and gets its ip address to store it into a device, this is
+ * to allow both server/device communication back and forth
+ * @param deviceId Device Id
+ * @param address ip address from NodeJS request
+ */
+export function assignDeviceIpAddress(deviceId: number, address: string) {
   let device = devices.find((device) => device.id == deviceId);
   let chunks = address.split(':');
   let ip = chunks[chunks.length - 1];
@@ -72,9 +81,9 @@ export function assignDeviceIpAddress(deviceId, address) {
   }
 }
 
-export function getDevices(): ServerDevice[] {
+export function getDevices(): DeviceData[] {
   return Object.values(devices).map((device: Device) => {
-    let data: ServerDevice = {
+    let data: DeviceData = {
       id: device.id,
       name: device.name,
       value: device.value,

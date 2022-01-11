@@ -12,7 +12,7 @@ const sensors: Sensor[] = [
   new Sensor(5, 'value', 'Common area temp/humidity', [rooms.kitchen, rooms['dinning-room']], ['temperature', 'humidity'])
 ];
 
-export function updateSensor(sensorId, value) {
-  let sensor = sensors.find(sensor => sensor.id === sensorId);
+export function updateSensor(sensorId: number, value: any) {
+  let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);
   if (sensor) sensor.update(value);
 }
