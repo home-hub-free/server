@@ -113,6 +113,10 @@ function cleanup() {
   };
 }
 
+export function getSunsetTimeStamp() {
+  return dailyEvents['sunset'].time;
+}
+
 export function isPastSunset() {
   let now = new Date().getTime();
   let sunset = dailyEvents['sunset'].time;

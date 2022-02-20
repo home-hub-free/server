@@ -63,8 +63,9 @@ app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
   if (device) {
     // Avoid changing value type devices to manual mode for now
-    device.manualTrigger(request.body.value, request.body.manual && device.type !== 'value').then(() => {
+    device.manualTrigger(request.body.value).then(() => {
       response.send(true);
+      if (!request.body.manual) device.manual = false;
     }).catch(() => {
       response.send(false);
     });

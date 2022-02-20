@@ -60,8 +60,8 @@ export class Device {
       // reject('Unable to trigger device');
       return;
     }
-
-    this.manualTrigger(value);
+    this.notifyDevice(value) 
+    // this.manualTrigger(value);
   }
 
   /**
@@ -69,8 +69,9 @@ export class Device {
    * interactions. This type of trigger will be direct and have no conditions
    * attatched to it
    */
-  manualTrigger(value: any, manual?: boolean): Promise<boolean> {
+  manualTrigger(value: any): Promise<boolean> {
     return this.notifyDevice(value).then((success) => {
+      if (this.type !== 'value') this.manual = true;
       return success;
     });
   }

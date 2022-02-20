@@ -1,4 +1,3 @@
-// import storage from 'node-persist';
 import { log, EVENT_TYPES } from '../logger';
 import { Device, DeviceData } from '../classes/device.class';
 import {
@@ -36,9 +35,9 @@ export function randomLights() {
   let lights = [devices[0], devices[1], devices[4]];
   setInterval(() => {
     lights.forEach((light) => {
-      light.manualTrigger(true, true);
+      light.manualTrigger(true);
       setTimeout(() => {
-        light.manualTrigger(false, true);
+        light.manualTrigger(false);
       }, 100 * (Math.floor(Math.random() * (5 - 1 + 1) + 1)));
     });
   }, 800);
