@@ -17,14 +17,15 @@ export const EVENT_TYPES = {
 const blockedLogs = [
   EVENT_TYPES.daily_event,
   // EVENT_TYPES.device_detected,
-  EVENT_TYPES.device_triggered,
-  EVENT_TYPES.device_new_ip,
-  EVENT_TYPES.ping,
-  EVENT_TYPES.room_active,
+  // EVENT_TYPES.device_triggered,
+  // EVENT_TYPES.device_new_ip,
+  // EVENT_TYPES.ping,
+  // EVENT_TYPES.room_active,
   EVENT_TYPES.room_innactive,
-  EVENT_TYPES.room_signal,
+  // EVENT_TYPES.room_signal,
   EVENT_TYPES.timer_reset,
   EVENT_TYPES.init_value,
+  EVENT_TYPES.error,
 ];
 
 // Used just to make sure we log 100% text and not objects

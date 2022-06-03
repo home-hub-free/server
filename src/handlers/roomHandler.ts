@@ -2,39 +2,28 @@ import { devices } from './deviceHandler';
 import { 
   RoomKeys,
   Room,
-  RoomList,
-  RoomEvent,
-  RoomData
+  RoomMap,
+  RoomData,
+  RoomEvent
 } from '../classes/room.class';
 
-// Defining rooms
-let kitchen = new Room('kitchen', {
-  'kitchen-light-down': devices[0],
-  'kitchen-light-up': devices[1]
-});
-let dinningRoom = new Room('dinning-room', {
-  'kitchen-light-down': devices[0],
-  'dinning-lamp': devices[4]
-}, 1000 * 60 * 2);
-let mainRoom = new Room('main-room');
-
-// Defining rooms behavior
-['active', 'inactive'].forEach((event: RoomEvent) => {
-  kitchen.on(event, (devices, value) => {
-    Object.values(devices).forEach(device => device.autoTrigger(value));
-  });
-
-  dinningRoom.on(event, (devices, value) => {
-    devices['dinning-lamp'].autoTrigger(value);
-    if (new Date().getHours() < 6) devices['kitchen-light-down'].autoTrigger(value);
-  });
+/**
+ * TODO: Rooms should be user defined, not code defined
+ */
+export let rooms: RoomMap = {};
+Object.values(RoomKeys).map((roomName) => {
+  rooms[roomName] = new Room(roomName);
 });
 
-export let rooms: RoomList = {
-  'kitchen': kitchen,
-  'dinning-room': dinningRoom,
-  'main-room': mainRoom
-};
+rooms[RoomKeys.Kithen].on(RoomEvent.SignalUpdate, () => {
+  devices[0].timerTrigger(true, false);
+  devices[1].timerTrigger(true, false);
+});
+
+rooms[RoomKeys.DinningRoom].on(RoomEvent.SignalUpdate, () => {
+  devices[4].timerTrigger(true, false);
+});
+
 
 /**
  * Iterates over room list object creates simples objects containing only

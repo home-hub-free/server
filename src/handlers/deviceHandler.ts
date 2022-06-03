@@ -1,31 +1,29 @@
 import { log, EVENT_TYPES } from '../logger';
 import { Device, DeviceData } from '../classes/device.class';
 import {
+  dailyEvents,
   setSunriseEvent,
   setSunsetEvent
 } from './dailyEventsHandler';
 
+/**
+ * TODO: Re-write this so that device data is not hardcoded, instead every device should be responsible
+ * for communicating its id, name and data type, attempt to change all the app to that concept for
+ * Devices, Sensors, Rooms should also be user defined not code defined
+ */
 export const devices: Device[] = [
   new Device(1, 'Kitchen lights (down)', 'boolean'),
-  new Device(2, 'Kitchen lights (up)', 'boolean', (device) => {
-    let sum = getBlindsOpeness();
-    let hour = new Date().getHours();
-    if (device.value) {
-      return hour > 6 && sum < 50;
-    }
-    return true;
-  }),
+  new Device(2, 'Kitchen lights (up)', 'boolean'),
   new Device(3, 'Livingroom blinds (right)', 'value'),
   new Device(4, 'Livingroom blinds (left)', 'value'),
-  new Device(5, 'Dinning/Living room lamp', 'boolean', (device) => {
-    let sum = getBlindsOpeness();
-    let hour = new Date().getHours();
-    if (device.value) {
-      return hour > 6 && sum < 50;
-    }
-    return true;
-  }),
+  new Device(5, 'Dinning/Living room lamp', 'boolean'),
+  new Device(6, 'Kitchen Fan', 'value')
 ];
+
+// // Kitchen lights up
+devices[1].operationalRanges = ['sunrise-23:59'];
+// // Dinning room lamp
+devices[4].operationalRanges = ['sunset-23:59', '0:0-1:0'];
 
 /**
  * Used once for new years, ill keep this code laying around
@@ -70,7 +68,7 @@ export function assignDeviceIpAddress(deviceId: number, address: string) {
   let ip = chunks[chunks.length - 1];
   if (device && !device.ip) {
     device.ip = ip;
-    device.assignStorageValue();
+    // device.assignStorageValue();
     log(EVENT_TYPES.device_detected, [deviceId, device.name, ip]);
   }
 
@@ -92,11 +90,4 @@ export function getDevices(): DeviceData[] {
 
     return data;
   });
-}
-
-function getBlindsOpeness(): number {
-  let blindsRight = devices.find(device => device.id === 3);
-  let blindsLeft = devices.find(device => device.id === 4);
-  let sum = parseInt(blindsRight.value) + parseInt(blindsLeft.value);
-  return sum;
 }

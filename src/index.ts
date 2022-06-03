@@ -15,6 +15,12 @@ import {
   getTodayWeather,
   getDailyEvents
 } from './handlers/dailyEventsHandler';
+import { Device } from './classes/device.class';
+
+/**
+ * This project requires to be setup with a designated local ip address so the network of 
+ * devices can communicate directly to it
+ */
 
 const app: Express = express();
 const PORT = 8080;
@@ -42,6 +48,18 @@ app.options('*', cors());
 
 app.listen(PORT, () => {
   console.log('App working at: ', PORT);
+});
+
+app.get('/get-daily-events', (request, response) => {
+  response.send(getDailyEvents());
+});
+
+app.get('/get-devices', (request, response) => {
+  response.send(getDevices());
+});
+
+app.get('/get-room-states', (request, response) => {
+  response.send(getRoomsStates());
 });
 
 app.post('/sensor-signal', (request, response) => {
@@ -72,10 +90,6 @@ app.post('/manual-control', (request, response) => {
   }
 });
 
-app.get('/get-daily-events', (request, response) => {
-  response.send(getDailyEvents());
-});
-
 app.post('/set-daily-event', (request, response) => {
   // let name = request.body.name;
   // let description = request.body.description;
@@ -97,10 +111,18 @@ app.post('/set-daily-event', (request, response) => {
   // }
 });
 
-app.get('/get-devices', (request, response) => {
-  response.send(getDevices());
+app.post('/declare-sensor', () => {})
+
+app.post('/declare-room', () => {})
+
+app.post('/declare-device', (request, response) => {
+  let { id, name, type, operationalRanges } = request.body;
+  let device = new Device(id, name, type, operationalRanges || []);
+  devices.push(device);
+
+  response.send(true);
 });
 
-app.get('/get-room-states', (request, response) => {
-  response.send(getRoomsStates());
+app.post('/declare-sensor', () => {
+
 });

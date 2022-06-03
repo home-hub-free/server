@@ -53,7 +53,7 @@ export class Sensor {
     }
 
     this.rooms.forEach((room) => {
-      room.sensorSignal(this.value);
+      room.activate(this.value);
     });
   }
 
