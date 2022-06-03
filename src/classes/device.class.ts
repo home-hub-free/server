@@ -86,8 +86,6 @@ export class Device {
    * trough auto-trigger conditions.
    * @param startValue Value that will be applied if there is not timmer already initialized
    * @param endValue Value that will applied after 1 minute
-   * @param overrideCurrent If true and a timer is in progress, it will entirely override the start
-   * value
    */
   timerTrigger(startValue: any, endValue: any) {
     if (this._timer) {
