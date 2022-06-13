@@ -1,3 +1,6 @@
+import * as dotenv from "dotenv";
+dotenv.config();
+
 import express, { Express } from 'express';
 import cors from 'cors';
 import storage from 'node-persist';
@@ -13,7 +16,8 @@ import {
 } from './handlers/deviceHandler';
 import {
   getTodayWeather,
-  getDailyEvents
+  getDailyEvents,
+  getTodayForecastSentence
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
 
@@ -38,7 +42,10 @@ storage.init({
   forgiveParseErrors: false
 });
 
-getTodayWeather();
+// getTodayWeather();
+getTodayForecastSentence().then((sentence) => {
+  console.log(sentence);
+});
 initDailyDevices();
 initLocalSensors();
 

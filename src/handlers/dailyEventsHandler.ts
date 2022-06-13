@@ -1,7 +1,20 @@
-const axios = require('axios');
-const moment = require('moment');
-const schedule = require('node-schedule');
-const { log, EVENT_TYPES } = require('../logger');
+import axios from 'axios';
+import moment from 'moment';
+import schedule from 'node-schedule';
+import { log, EVENT_TYPES } from '../logger';
+const WeatherApiURL = 'https://api.weatherapi.com/v1/';
+const WeatherApiKey = process.env.WEATHER_API_KEY || '';
+const ipAddress = process.env.IP_ADDRESS || '';
+import { WeatherDescriptions } from '../weather-descriptions';
+import { Greets, SentenceConnectors, SentenceEnders } from '../greets';
+
+export interface IForecastData {
+  max: number,
+  min: number,
+  avg: number,
+  humidity_avg: number,
+  description: string
+}
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -10,6 +23,10 @@ export let dailyEvents: any = {
 // Array of funcitons that will be triggeres at sunrise/sunset
 const atSunrise = [];
 const atSunset = [];
+const coords = {
+  lat: process.env.LAT,
+  lng: process.env.LNG,
+};
 
 var rule = new schedule.RecurrenceRule();
 rule.hour = 0;
@@ -19,6 +36,7 @@ rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
   cleanup();
   getTodayWeather();
+  // testWeatherAPI();
 });
 
 export function addDailyEvent(name, time, execution) {
@@ -49,10 +67,6 @@ export function setSunsetEvent(desc, fn) {
 }
 
 export function getTodayWeather() {
-  const coords = {
-    lat: 20.6064818,
-    lng: -100.4898658
-  };
   let now = new Date();
   var today = moment(now).format('YYYY-MM-DD');
 
@@ -79,6 +93,34 @@ export function getTodayWeather() {
     .catch(err => {
       log(EVENT_TYPES.error, [err]);
     });
+}
+
+export function getTodayForecastSentence() {
+  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=${ipAddress}&days=1&aqi=no&alerts=no`;
+  return axios.get(url)
+    .then((result) => {
+      let forecastData = result.data.forecast.forecastday[0];
+      let maxTemp = forecastData.day.maxtemp_c;
+      let minTemp = forecastData.day.mintemp_c;
+      let average = forecastData.day.avgtemp_c;
+      let humidity = forecastData.day.avghumidity;
+      let descriptionCode = forecastData.day.condition.code;
+      let generalDescription = WeatherDescriptions.find((item) => item.code === descriptionCode).sentence;
+
+      let sentence = buildForecastResume({
+        max: maxTemp,
+        min: minTemp,
+        avg: average,
+        humidity_avg: humidity,
+        description: generalDescription
+      });
+      return sentence;
+    })
+    .catch((err) => {
+      if (err) {
+        console.log(err);
+      }
+    })
 }
 
 export function getDailyEvents() {
@@ -124,4 +166,14 @@ export function isPastSunset() {
     return now >= sunset;
   }
   return null;
+}
+
+function buildForecastResume(data: IForecastData): string {
+  let greet = Greets.morning[Math.floor(Math.random() * Greets.morning.length)];
+  let connector = SentenceConnectors[Math.floor(Math.random() * SentenceConnectors.length)];
+  let ender = SentenceEnders[Math.floor(Math.random() * SentenceEnders.length)];
+
+  let forecastSentence = `${greet} ${connector}. For today's weather, the average temperature is ${Math.round(data.avg)}°, with a peek of ${Math.round(data.max)}° celsius. ${data.description}. ${ender}`;
+
+  return forecastSentence;
 }
