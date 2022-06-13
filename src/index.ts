@@ -15,9 +15,8 @@ import {
   initDailyDevices
 } from './handlers/deviceHandler';
 import {
-  getTodayWeather,
-  getDailyEvents,
-  getTodayForecastSentence
+  getSunriseData,
+  getDailyEvents
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
 
@@ -42,10 +41,7 @@ storage.init({
   forgiveParseErrors: false
 });
 
-// getTodayWeather();
-getTodayForecastSentence().then((sentence) => {
-  console.log(sentence);
-});
+getSunriseData();
 initDailyDevices();
 initLocalSensors();
 

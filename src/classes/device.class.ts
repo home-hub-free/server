@@ -25,7 +25,11 @@ export class Device {
   public id: number;
   public name: string;
   public type: DeviceType;
-  // [HH:MM-HH:MM] (24h based)
+  /**
+   * [HH:MM-HH:MM, HH:MM-HH:MM]
+   * HH: 0-23
+   * MM: 0-59
+   */
   public operationalRanges: string[];
 
   // This needs to change to a single endpoint to notify the devices

@@ -5,7 +5,9 @@ export const Greets = {
     "Good morning. Welcome to today!",
     "Rise and shine. You don’t have to shine if you don’t want to though.",
     "Good morning. Grab your cup of coffee and let the busy day begin!",
-    "Hello there, I hope you have a great day."
+    "Hello there, I hope you have a great day.",
+    "Good morning. Have a cup of coffee and start your engines because it’s still a long way before you reach the weekend.",
+    "Good morning, a lot of code to be written, designs to be thought of."
   ],
   afternoon: [],
   evening: []
@@ -21,6 +23,6 @@ export const SentenceConnectors = [
 
 export const SentenceEnders = [
   'That is all data I have for now, have a nice day',
-  'That is all from me, have a nice morning',
-  'And tha\'s all i have for now, have a nice morning'
+  'That is all from me, have a nice day',
+  'And that\'s all i have for now, have a nice day'
 ]
