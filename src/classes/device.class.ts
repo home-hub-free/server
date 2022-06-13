@@ -163,12 +163,15 @@ export class Device {
 
   private parseRange(value: string) {
     let timestamp: number;
+    let sunrise = dailyEvents.sunrise;
+    let sunset = dailyEvents.sunset;
+
     switch (value) {
       case 'sunrise':
-        timestamp = dailyEvents.sunrise.time.getTime();
+        timestamp = sunrise.time && sunrise.time.getTime() || new Date().getTime();
         break;
       case 'sunset':
-        timestamp = dailyEvents.sunset.time.getTime();
+        timestamp = sunset.time && sunset.time.getTime() || new Date().getTime();
         break;
       default:
         timestamp = this.parseTimeValue(value).getTime();

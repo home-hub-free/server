@@ -15,6 +15,7 @@ const AWS = require('aws-sdk');
 export interface IForecastData {
   max: number,
   min: number,
+  current: number,
   avg: number,
   humidity_avg: number,
   description: string
@@ -116,6 +117,7 @@ export function getTodayForecastSentence(): Promise<string> {
         let generalDescription = WeatherDescriptions.find((item) => item.code === descriptionCode).sentence;
   
         let sentence = buildForecastResume({
+          current: result.data.current.temp_c,
           max: maxTemp,
           min: minTemp,
           avg: average,
@@ -184,7 +186,8 @@ function buildForecastResume(data: IForecastData): string {
   let connector = SentenceConnectors[Math.floor(Math.random() * SentenceConnectors.length)];
   let ender = SentenceEnders[Math.floor(Math.random() * SentenceEnders.length)];
 
-  let forecastSentence = `${greet} ${connector}. For today's weather, the average temperature is ${Math.round(data.avg)}°, with a peek of ${Math.round(data.max)}° celsius. ${data.description}. ${ender}`;
+  let forecastSentence = 
+    `${greet} ${connector}. For today's weather, the current temperature is ${Math.round(data.avg)}°, today's theoretical maximum is ${Math.round(data.max)}° celsius. ${data.description}. ${ender}`;
 
   return forecastSentence;
 }
@@ -218,10 +221,3 @@ function voiceNotify(speechFile) {
     player.play(speechFile)
   })
 }
-
-setInterval(() => {
-  // Play this sound and super low volume to keep the bluetooth speaker from turning off
-  player.play('./src/sounds/pre-notifier.mp3', {
-    mpg123: ['-f', 50]
-  });
-}, 60 * 1000);
