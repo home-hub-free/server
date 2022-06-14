@@ -16,9 +16,10 @@ import {
 } from './handlers/deviceHandler';
 import {
   getSunriseData,
-  getDailyEvents
+  getDailyEvents,
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
+import { emma } from './emma/emma-assistent.class';
 
 /**
  * This project requires to be setup with a designated local ip address so the network of 
@@ -128,4 +129,11 @@ app.post('/declare-device', (request, response) => {
 
 app.post('/declare-sensor', () => {
 
+});
+
+app.get('/request-weather', (request, response) => {
+  emma.sayWeatherForecast();
+  // speakDayResume().then((sentence) => {
+  //   response.send(sentence);
+  // });
 });

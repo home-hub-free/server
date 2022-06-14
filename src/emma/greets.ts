@@ -9,8 +9,12 @@ export const Greets = {
     "Good morning. Have a cup of coffee and start your engines because it’s still a long way before you reach the weekend.",
     "Good morning, a lot of code to be written, designs to be thought of."
   ],
-  afternoon: [],
-  evening: []
+  afternoon: [
+    "Good afterenoon."
+  ],
+  evening: [
+    "Good evening."
+  ]
 };
 
 export const SentenceConnectors = [

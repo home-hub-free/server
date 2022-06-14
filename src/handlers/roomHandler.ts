@@ -6,7 +6,9 @@ import {
   RoomData,
   RoomEvent
 } from '../classes/room.class';
-import { hasBeenGreeted, speakDayResume } from './dailyEventsHandler';
+import { emma } from '../emma/emma-assistent.class';
+import { getDayTimeWord } from './forecastHandler';
+
 /**
  * TODO: Rooms should be user defined, not code defined
  */
@@ -43,18 +45,21 @@ export function getRoomsStates(): RoomData[] {
   });
 }
 
+/**
+ * Checks wether we need to trigger the voiced weather forecast
+ */
 let kitchenTriggerCounts = 0;
 let kitchenTriggerTimeout = null;
 function triggerMorningForecastIfNeeded() {
-  if (hasBeenGreeted) {
-    return;
-  }
+  let currentHour = new Date().getHours();
+  let dayTimeWord = getDayTimeWord();
 
-  let hour = new Date().getHours();
+  if (emma.autoForecasted[dayTimeWord]) return;
+
   kitchenTriggerCounts++;
-  if (kitchenTriggerCounts >= 4 && !hasBeenGreeted && hour <= 11 && hour >= 6) {
+  if (kitchenTriggerCounts >= 4 && currentHour > 6) {
     kitchenTriggerCounts = 0;
-    speakDayResume();
+    emma.sayWeatherForecast(true);
   }
   
   if (kitchenTriggerTimeout) {
