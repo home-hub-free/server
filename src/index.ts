@@ -20,6 +20,7 @@ import {
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
 import { emma } from './emma/emma-assistent.class';
+import { getCalendarEvents } from './handlers/googleCalendarHandler';
 
 /**
  * This project requires to be setup with a designated local ip address so the network of 
@@ -133,4 +134,10 @@ app.post('/declare-sensor', () => {
 
 app.get('/request-weather', (request, response) => {
   emma.sayWeatherForecast();
+});
+
+app.get('/get-google-calendar', (request, response) => {
+  getCalendarEvents().then(data => {
+    response.send(data);
+  });
 });
