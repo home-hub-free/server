@@ -20,7 +20,7 @@ Object.values(RoomKeys).map((roomName) => {
 rooms[RoomKeys.Kithen].on(RoomEvent.SignalUpdate, () => {
   devices[0].timerTrigger(true, false);
   devices[1].timerTrigger(true, false);
-  triggerMorningForecastIfNeeded();
+  triggerForecastIfNeeded();
 });
 
 rooms[RoomKeys.DinningRoom].on(RoomEvent.SignalUpdate, () => {
@@ -50,14 +50,14 @@ export function getRoomsStates(): RoomData[] {
  */
 let kitchenTriggerCounts = 0;
 let kitchenTriggerTimeout = null;
-function triggerMorningForecastIfNeeded() {
+function triggerForecastIfNeeded() {
   let currentHour = new Date().getHours();
   let dayTimeWord = getDayTimeWord();
 
   if (emma.autoForecasted[dayTimeWord]) return;
 
   kitchenTriggerCounts++;
-  if (kitchenTriggerCounts >= 4 && currentHour > 6) {
+  if (kitchenTriggerCounts >= 10 && currentHour > 6) {
     kitchenTriggerCounts = 0;
     emma.sayWeatherForecast(true);
   }

@@ -15,7 +15,7 @@ import {
   initDailyDevices
 } from './handlers/deviceHandler';
 import {
-  getSunriseData,
+  updateAstroEvents,
   getDailyEvents,
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
@@ -42,7 +42,7 @@ storage.init({
   forgiveParseErrors: false
 });
 
-getSunriseData();
+updateAstroEvents();
 initDailyDevices();
 initLocalSensors();
 
@@ -133,7 +133,4 @@ app.post('/declare-sensor', () => {
 
 app.get('/request-weather', (request, response) => {
   emma.sayWeatherForecast();
-  // speakDayResume().then((sentence) => {
-  //   response.send(sentence);
-  // });
 });

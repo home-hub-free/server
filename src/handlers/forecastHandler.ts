@@ -2,10 +2,13 @@ import axios from 'axios';
 import { WeatherDescriptions } from '../weather-descriptions';
 const WeatherApiURL = 'https://api.weatherapi.com/v1/';
 const WeatherApiKey = process.env.WEATHER_API_KEY || '';
-const ipAddress = process.env.IP_ADDRESS || '';
+// const ipAddress = process.env.IP_ADDRESS || '';
 
 export interface IForecastData {
-  maxTemp: number,
+  maxTemp: {
+    hour: number,
+    value: number
+  },
   minTemp: number,
   currentTemp: number,
   dayAvgTemp: number,
@@ -14,14 +17,30 @@ export interface IForecastData {
   isRising: boolean
 }
 
-export const forecast: IForecastData = {
-  maxTemp: 0,
+export interface IAstroData {
+  sunset: Date,
+  sunrise: Date,
+  moonrise: Date,
+  moonset: Date
+}
+
+export let astro: IAstroData = {
+  sunset: null,
+  sunrise: null,
+  moonrise: null,
+  moonset: null
+};
+export let forecast: IForecastData = {
+  maxTemp: {
+    hour: 0,
+    value: 0
+  },
   minTemp: 0,
   currentTemp: 0,
   dayAvgTemp: 0,
   humidityAvg: 0,
   description: '',
-  isRising: false
+  isRising: null
 };
 
 export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
@@ -36,57 +55,19 @@ export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
 }
 
 /**
- * Hits the weather API endpoint to get the current weather conditions for the IP address
- * in the .env file
+ * Hits the weather API endpoint to get the current weather conditions
  * @returns Simplified data from the weather API
  */
-export function updateForecastData(): Promise<IForecastData> {
-  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=${ipAddress}&days=1&aqi=no&alerts=no`;
+export function updateWeatherData(): Promise<any> {
+  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=Santiago De Queretaro&days=1&aqi=no&alerts=no`;
   return new Promise((resolve, reject) => {
     axios.get(url)
       .then((result) => {
-        let now = new Date().getHours();
-        let isRising = false;
-        let forecastData = result.data.forecast.forecastday[0];
-        let maxTemp = forecastData.day.maxtemp_c;
-        let minTemp = forecastData.day.mintemp_c;
-        let average = forecastData.day.avgtemp_c;
-        let humidity = forecastData.day.avghumidity;
-        let descriptionCode = forecastData.day.condition.code;
-        let generalDescription = WeatherDescriptions.find((item) => item.code === descriptionCode).sentence;
 
-        let current = forecastData.hour[now];
-        let next = forecastData.hour[now + 1];
-        if (next) {
-          if (current.temp_c < next.temp_c) {
-            isRising = true;
-          } else if (current.temp_c > next.temp_c) {
-            isRising = false;
-          } else {
-            isRising = null;
-          }
-        }
+        updateForecastData(result);
+        updateAstroData(result);
 
-        let maxTempHour = 0;
-        forecastData.hour.forEach((hour, i) => {
-          if (hour.temp_c >= maxTemp) {
-            maxTempHour = i;
-          }
-        });
-        
-        if (maxTempHour < now) {
-          maxTemp = 0;
-        }
-        
-        forecast.maxTemp = maxTemp;
-        forecast.minTemp = minTemp;
-        forecast.currentTemp = result.data.current.temp_c;
-        forecast.dayAvgTemp = average;
-        forecast.humidityAvg = humidity;
-        forecast.description = generalDescription;
-        forecast.isRising = isRising;
-
-        resolve(forecast);
+        resolve({ forecast, astro});
       })
       .catch((err) => {
         if (err) {
@@ -94,4 +75,57 @@ export function updateForecastData(): Promise<IForecastData> {
         }
       });
   });
+}
+
+function updateForecastData(result) {
+  let currentHour = new Date().getHours();
+  let forecastDay = result.data.forecast.forecastday[0];
+  
+  // Define if temperature is currently rising
+  let isRising = null;
+  let currentHourForecast = forecastDay.hour[currentHour];
+  let nextHourForecast = forecastDay.hour[currentHour + 1];
+  if (nextHourForecast) isRising = currentHourForecast.temp_c < nextHourForecast.temp_c;
+
+  // Define the time of the day with the highest temperature
+  // This is an array of length 23, one index per hour of the day
+  let temperatures = forecastDay.hour.map(hourData => hourData.temp_c);
+  let highestTemp = Math.max(...temperatures)
+  let hour = temperatures.indexOf(highestTemp);
+  forecast.maxTemp.value = highestTemp;
+  forecast.maxTemp.hour = hour;
+  
+  // Update all important values
+  forecast.minTemp = forecastDay.day.mintemp_c;
+  forecast.currentTemp = result.data.current.temp_c;
+  forecast.dayAvgTemp = forecastDay.day.avgtemp_c;
+  forecast.humidityAvg = forecastDay.day.avghumidity;
+  forecast.description = WeatherDescriptions.find((item) => item.code === forecastDay.day.condition.code).sentence;
+  forecast.isRising = isRising;
+}
+
+function updateAstroData(result) {
+  let astroServerData = result.data.forecast.forecastday[0].astro;
+  astro.sunrise = timeStringToDate(astroServerData.sunrise);
+  astro.sunset = timeStringToDate(astroServerData.sunset);
+  astro.moonrise = timeStringToDate(astroServerData.moonrise);
+  astro.moonset = timeStringToDate(astroServerData.moonset);
+}
+
+// Date string comes in format: HH:MM AM/PM
+function timeStringToDate(date: string): Date {
+  let ISODate = new Date();
+  let splitted = date.split(' ');
+  let time = splitted[0];
+  let meridian = splitted[1];
+
+  let timeSplitted = time.split(':');
+  let hour = parseInt(meridian === 'PM' ? timeSplitted[0] + 12 : timeSplitted[0]);
+  let minute = parseInt(timeSplitted[1]);
+
+  ISODate.setHours(hour);
+  ISODate.setMinutes(minute);
+  ISODate.setSeconds(0);
+
+  return ISODate;
 }

@@ -1,8 +1,8 @@
 
-import axios from 'axios';
 import moment from 'moment';
 import schedule from 'node-schedule';
 import { log, EVENT_TYPES } from '../logger';
+import { updateWeatherData } from './forecastHandler'
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -12,10 +12,6 @@ export let dailyEvents: any = {
 // Array of funcitons that will be triggeres at sunrise/sunset
 const atSunrise = [];
 const atSunset = [];
-const coords = {
-  lat: process.env.LAT,
-  lng: process.env.LNG,
-};
 
 var rule = new schedule.RecurrenceRule();
 rule.hour = 0;
@@ -24,7 +20,7 @@ rule.second = 0;
 rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
   cleanup();
-  getSunriseData();
+  updateAstroEvents();
 });
 
 export function addDailyEvent(name, time, execution) {
@@ -54,32 +50,27 @@ export function setSunsetEvent(desc, fn) {
   };
 }
 
-export function getSunriseData() {
-  let now = new Date();
-  var today = moment(now).format('YYYY-MM-DD');
-  return axios.get(`https://api.met.no/weatherapi/sunrise/2.0/.json?lat=${coords.lat}&lon=${coords.lng}&date=${today}&offset=-06:00`)
+export function updateAstroEvents() {
+  updateWeatherData()
     .then((result) => {
-      if (result && result.data && result.data.location && result.data.location.time && result.data.location.time.length > 0) {
-        let dayData = result.data.location.time[0];
-        let sunrise = new Date(dayData.sunrise.time);
-        let sunset = new Date(dayData.sunset.time);
+      let sunrise = result.astro.sunrise;
+      let sunset = result.astro.sunset;
 
-        addDailyEvent('sunrise', sunrise, () => {
-          atSunrise.forEach(data => data.fn());
-          log(EVENT_TYPES.daily_event, ['Executing scheduled sunrise']);
-        });
-        atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.description));
+      addDailyEvent('sunrise', sunrise, () => {
+        atSunrise.forEach(data => data.fn());
+        log(EVENT_TYPES.daily_event, ['Executing scheduled sunrise']);
+      });
+      atSunrise.forEach(data => dailyEvents['sunrise'].children.push(data.description));
 
-        addDailyEvent('sunset', sunset, () => {
-          atSunset.forEach(data => data.fn());
-          log(EVENT_TYPES.daily_event, ['Executing scheduled sunset']);
-        });
-        atSunset.forEach(data => dailyEvents['sunset'].children.push(data.description));
-      }
+      addDailyEvent('sunset', sunset, () => {
+        atSunset.forEach(data => data.fn());
+        log(EVENT_TYPES.daily_event, ['Executing scheduled sunset']);
+      });
+      atSunset.forEach(data => dailyEvents['sunset'].children.push(data.description));
     })
-    .catch(err => {
+    .catch((err) => {
       log(EVENT_TYPES.error, [err]);
-    });
+    })
 }
 
 export function getDailyEvents() {
