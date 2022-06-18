@@ -81,7 +81,7 @@ function getCalendarEvents(id: string) {
       calendarId: id,
       timeMin: now.toISOString(),
       timeMax: endOfDay.toISOString(),
-      maxResults: 2,
+      maxResults: 20,
       singleEvents: true,
       orderBy: 'startTime',
     }, (error, result) => {

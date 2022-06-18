@@ -57,7 +57,7 @@ function triggerForecastIfNeeded() {
   if (emma.autoForecasted[dayTimeWord]) return;
 
   kitchenTriggerCounts++;
-  if (kitchenTriggerCounts >= 10 && currentHour > 6) {
+  if (kitchenTriggerCounts >= 8 && currentHour > 6) {
     kitchenTriggerCounts = 0;
     emma.sayWeatherForecast(true);
   }

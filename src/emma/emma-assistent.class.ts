@@ -86,13 +86,13 @@ class Emma {
   }
 
   public sayWeatherForecast(autoTriggered?: boolean) {
+    let dayTimeWord = getDayTimeWord();
+    if (autoTriggered) {
+      this.autoForecasted[dayTimeWord] = true;
+    }
     updateWeatherData().then((data) => {
       let sentence = this.buildForecastSentence(data.forecast);
-      let dayTimeWord = getDayTimeWord();
       this.say(sentence).then(() => {
-        if (autoTriggered) {
-          this.autoForecasted[dayTimeWord] = true;
-        }
       });
     });
   }
