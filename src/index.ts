@@ -149,6 +149,10 @@ app.get('/get-google-calendar', (request, response) => {
   });
 });
 
-app.get('/emma-forecast', (request, response) => {
-  response.send(emma.autoForecasted);
-})
+app.get('/emma', (request, response) => {
+  let forecasted = emma.autoForecasted;
+  let latest = emma.latestSpeeches
+
+  response.send({forecasted, latest});
+});
+
