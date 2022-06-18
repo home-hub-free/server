@@ -65,19 +65,23 @@ class Emma {
     Polly.synthesizeSpeech(this.pollyOptions, (err, data) => {
       if (err) return promise.reject(err);
 
-      if (notify) {
-        player.play(preSpeechSound);
-        // sound.play(preSpeechSound, 1);
-      }
-
       fs.writeFileSync(emmaSpeechPath, data.AudioStream);
-      player.play(emmaSpeechPath, {},   () => {
-        this.speechQueue.shift();
-        promise.resolve(true);
-        if (this.speechQueue.length) this.playQueue();  
-      });
-
-      player.test;
+      if (notify) {
+        player.play(preSpeechSound, () => {
+          player.play(emmaSpeechPath, () => {
+            this.speechQueue.shift();
+            promise.resolve(true);
+            if (this.speechQueue.length) this.playQueue();  
+          });
+        });
+        // sound.play(preSpeechSound, 1);
+      } else {
+        player.play(emmaSpeechPath, () => {
+          this.speechQueue.shift();
+          promise.resolve(true);
+          if (this.speechQueue.length) this.playQueue();  
+        });
+      }
     });
   }
 
