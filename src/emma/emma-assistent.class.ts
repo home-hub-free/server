@@ -1,14 +1,22 @@
 import { getDayTimeWord, IForecastData, updateWeatherData } from '../handlers/forecastHandler';
-import { Greets, SentenceConnectors, SentenceEnders } from './greets';
+import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets';
 import fs from 'fs';
+import { IEventData } from '../handlers/googleCalendarHandler';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
+const preSpeechSound =  './src/sounds/pre-notifier.mp3';
 const Polly = new AWS.Polly({
   region: 'us-east-1'
 });
 
-class Emma {
+interface ISpeechPromise {
+  text: string,
+  resolve: (value: unknown) => void,
+  reject: (reason?: any) => void
+}
+
+class Emma {  
 
   public autoForecasted = {
     morning: false,
@@ -16,40 +24,78 @@ class Emma {
     evening: false
   };
 
-  constructor() {}
+  private speechQueue: ISpeechPromise[] = [];
+  private pollyOptions = {
+    Engine: 'neural',
+    LanguageCode: 'en-GB',
+    OutputFormat: 'mp3',
+    Text: '',
+    VoiceId: 'Emma'
+  };
+
+  constructor() {
+    // this.say('This the first message').then(() => {
+    //   console.log('1 Done')
+    // });
+    // this.say('This is the second message').then(() => {
+    //   console.log('2 Done')
+    // });
+    // this.say('This is the third message').then(() => {
+    //   console.log('3 Done');
+    // });
+  }
 
   public say(text: string): Promise<boolean> {
-    const pollyOptions = {
-      Engine: 'neural',
-      LanguageCode: 'en-GB',
-      OutputFormat: 'mp3',
-      Text: text,
-      VoiceId: 'Emma'
-    };
     return new Promise((resolve, reject) => {
-      Polly.synthesizeSpeech(pollyOptions, (err, data) => {
-        if (err) return reject(err);
-        
-        fs.writeFileSync(emmaSpeechPath, data.AudioStream);
-        player.play('./src/sounds/pre-notifier.mp3', () => {
-          player.play(emmaSpeechPath, () => {
-            resolve(true);
-          });
-        });
+      this.speechQueue.push({
+        text: text,
+        resolve: resolve,
+        reject: reject
       });
+
+      if (this.speechQueue.length === 1) {
+        this.playQueue(true);
+      }
+    });
+  }
+
+  private playQueue(notify?: boolean) {
+    let promise = this.speechQueue[0];
+    this.pollyOptions.Text = promise.text;
+    Polly.synthesizeSpeech(this.pollyOptions, (err, data) => {
+      if (err) return promise.reject(err);
+
+      if (notify) {
+        player.play(preSpeechSound);
+        // sound.play(preSpeechSound, 1);
+      }
+
+      fs.writeFileSync(emmaSpeechPath, data.AudioStream);
+      player.play(emmaSpeechPath, {},   () => {
+        this.speechQueue.shift();
+        promise.resolve(true);
+        if (this.speechQueue.length) this.playQueue();  
+      });
+
+      player.test;
     });
   }
 
   public sayWeatherForecast(autoTriggered?: boolean) {
     updateWeatherData().then((data) => {
       let sentence = this.buildForecastSentence(data.forecast);
+      let dayTimeWord = getDayTimeWord();
       this.say(sentence).then(() => {
         if (autoTriggered) {
-          let dayTimeWord = getDayTimeWord();
           this.autoForecasted[dayTimeWord] = true;
         }
       });
     });
+  }
+
+  public sayCalendarEvent(calendarName: string, eventData: IEventData) {
+    let sentence = this.buildCalendarEventSentence(calendarName, eventData);
+    this.say(sentence);
   }
 
   private buildForecastSentence(data: IForecastData): string {
@@ -67,9 +113,34 @@ class Emma {
     let emmaWeatherDescription = `${data.description}.`;
     let emmaDone = ender;
 
-    let fullSentence = `${emmaGreet} ${emmaCurrentWeather} ${emmaMaxTemperature} ${emmaWeatherDescription} ${emmaDone}`;
-  
-    return fullSentence;
+    return `${emmaGreet} ${emmaCurrentWeather} ${emmaMaxTemperature} ${emmaWeatherDescription} ${emmaDone}`;
+  }
+
+  private buildCalendarEventSentence(calendarName, eventData) {
+    let now = new Date();
+
+    let eventTime = eventData.startTime;
+    let isReminder = now.getTime() < eventData.startTime;
+    // We shouldn't get events from the past.
+    let remainingTime = eventTime.getTime() - now.getTime();
+    let start = isReminder ? Reminders[Math.floor(Math.random() * Reminders.length)] : '';
+    let calendar = `from ${calendarName}'s calendar`;
+    let type = eventData.type;
+    
+    let aMinute = 60 * 1000;
+    let anHour = aMinute * 60;
+    let time = '';
+    if (remainingTime <= aMinute) {
+      time = 'is about to start';
+    } else if (remainingTime > aMinute && remainingTime <= anHour) {
+      let minutes = Math.round(remainingTime / aMinute);
+      time = `starts in ${minutes} minutes`;
+    } else if (remainingTime > anHour) {
+      let hours = Math.round(remainingTime / (60 * 1000 * 60));
+      time = hours > 1 ? `starts in ${hours} hours` : 'starts in about an hour'
+    }
+
+    return `${start}, ${calendar}, ${type} "${eventData.name}", ${time}`;
   }
 }
 
@@ -78,6 +149,7 @@ export const emma = new Emma();
 setInterval(() => {
   // Play this sound and super low volume to keep the bluetooth speaker from turning off
   player.play('./src/sounds/pre-notifier.mp3', {
+    // Command specific to raspberry audio player
     mpg123: ['-f', 500]
   });
 }, 60 * 1000);

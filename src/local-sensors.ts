@@ -1,4 +1,4 @@
-var sensorLib = require("node-dht-sensor");
+let sensorLib;
 const { updateSensor } = require("./handlers/sensorHandler");
 
 let tempSensor = {
@@ -24,6 +24,9 @@ export function initLocalSensors() {
 }
 
 function updateSensors() {
+  if (!sensorLib) {
+    sensorLib = require('node-dht-sensor');
+  }
   let readOut = sensorLib.read(tempSensor.type, tempSensor.pin);
   let value = parseFloat(readOut.temperature) + ':' + parseFloat(readOut.humidity);
   updateSensor(tempSensor.id, value);

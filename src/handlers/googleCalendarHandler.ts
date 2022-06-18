@@ -1,10 +1,10 @@
 import { google } from 'googleapis';
 
+const calendars = require('../../google-calendars.json');
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
-const GOOGLE_PRIVATE_KEY= process.env.GOOGLE_PRIVATE_KEY;
+const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
-// const GOOGLE_PROJECT_NUMBER = process.env.GOOGLE_PROJECT_NUMBER;
-const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
+
 
 const jwtClient = new google.auth.JWT(
   GOOGLE_CLIENT_EMAIL,
@@ -18,12 +18,70 @@ const calendar = google.calendar({
   auth: jwtClient
 });
 
-export function getCalendarEvents() {
+export interface IEventData {
+  type: string,
+  id: string,
+  startTime: Date,
+  endTime: Date,
+  name: string,
+  status: string
+}
+
+export interface ICalendarData {
+  calendarName: string,
+  events: IEventData[]
+}
+
+export function readCalendars(): Promise<ICalendarData[]> {
+  let calendarNames = Object.keys(calendars);
+  let resolved = 0;
+  let result: ICalendarData[] = [];
+
+  return new Promise((resolve, reject) => {
+    calendarNames.forEach((name, i) => {
+      getCalendarEvents(calendars[name])
+        .then((items: any) => {
+          result[i] = {
+            calendarName: name,
+            events: items.map((item) => buildEventDataData(item))
+          };
+          resolved++;
+          if (resolved >= calendarNames.length) {
+            resolve(result);
+          }
+        })
+        .catch((err) => {
+          reject(err);
+        })
+    });
+  });
+}
+
+function buildEventDataData(serverEventData): IEventData {
+  let data: IEventData = {
+    id: serverEventData.id,
+    name: serverEventData.summary,
+    type: serverEventData.kind.split('#')[1],
+    status: serverEventData.status,
+    startTime: new Date(serverEventData.start.dateTime),
+    endTime: new Date(serverEventData.end.dateTime),
+  };
+  return data;
+}
+
+function getCalendarEvents(id: string) {
+  let now = new Date();
+  let endOfDay = new Date();
+  endOfDay.setHours(23);
+  endOfDay.setMinutes(59);
+  endOfDay.setSeconds(59);
+
   return new Promise((resolve, reject) => {
     calendar.events.list({
-      calendarId: GOOGLE_CALENDAR_ID,
-      timeMin: (new Date()).toISOString(),
-      maxResults: 10,
+      calendarId: id,
+      timeMin: now.toISOString(),
+      timeMax: endOfDay.toISOString(),
+      maxResults: 2,
       singleEvents: true,
       orderBy: 'startTime',
     }, (error, result) => {

@@ -2,7 +2,9 @@
 import moment from 'moment';
 import schedule from 'node-schedule';
 import { log, EVENT_TYPES } from '../logger';
-import { updateWeatherData } from './forecastHandler'
+import { updateWeatherData } from './forecastHandler';
+import { readCalendars, ICalendarData, IEventData } from './googleCalendarHandler';
+import { emma } from '../emma/emma-assistent.class';
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -21,6 +23,7 @@ rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
   cleanup();
   updateAstroEvents();
+  updateDailyGoogleCalendarEvents();
 });
 
 export function addDailyEvent(name, time, execution) {
@@ -48,6 +51,24 @@ export function setSunsetEvent(desc, fn) {
       description: desc
     });
   };
+}
+
+export function updateDailyGoogleCalendarEvents() {
+  readCalendars().then((calendarsData: ICalendarData[]) => {
+    calendarsData.forEach((data: ICalendarData) => {
+      scheduleCalendarData(data);
+    });
+  });
+}
+
+function scheduleCalendarData(calendarData: ICalendarData) {
+  calendarData.events.forEach((event: IEventData) => {
+    let reminderTime = addMinutesToTimestamp(event.startTime, -15);
+
+    addDailyEvent('event_reminder-' + event.id, reminderTime, () => {
+      emma.sayCalendarEvent(calendarData.calendarName, event);
+    });
+  });
 }
 
 export function updateAstroEvents() {
@@ -90,11 +111,11 @@ export function addHoursToTimestamp(timestamp: Date, hours: number): Date {
   return addMinutesToTimestamp(timestamp, hours * 60);
 }
 
-function addMinutesToTimestamp(timestamp: Date, minutes: number): Date {
+export function addMinutesToTimestamp(timestamp: Date, minutes: number): Date {
   return addSecondsToTimestamp(timestamp, minutes * 60);
 }
 
-function addSecondsToTimestamp(timestamp: Date, seconds: number): Date {
+export function addSecondsToTimestamp(timestamp: Date, seconds: number): Date {
   return new Date(timestamp.getTime() + (seconds * 1000));
 }
 

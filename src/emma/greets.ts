@@ -30,3 +30,9 @@ export const SentenceEnders = [
   'That is all from me, have a nice day',
   'And that\'s all i have for now, have a nice day'
 ]
+
+export const Reminders = [
+  'Hey there, friendly reminder',
+  'Hello, just a heads up',
+  'Hey,  don\'t forget',
+]

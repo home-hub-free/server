@@ -5,3 +5,5 @@ package-lock.json
 **/data
 dist
 .env
+
+google-calendars.json

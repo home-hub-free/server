@@ -17,10 +17,11 @@ import {
 import {
   updateAstroEvents,
   getDailyEvents,
+  updateDailyGoogleCalendarEvents,
 } from './handlers/dailyEventsHandler';
 import { Device } from './classes/device.class';
 import { emma } from './emma/emma-assistent.class';
-import { getCalendarEvents } from './handlers/googleCalendarHandler';
+import { readCalendars } from './handlers/googleCalendarHandler';
 
 /**
  * This project requires to be setup with a designated local ip address so the network of 
@@ -46,6 +47,7 @@ storage.init({
 updateAstroEvents();
 initDailyDevices();
 initLocalSensors();
+updateDailyGoogleCalendarEvents();
 
 app.use(express.json());
 app.use(cors());
@@ -137,7 +139,12 @@ app.get('/request-weather', (request, response) => {
 });
 
 app.get('/get-google-calendar', (request, response) => {
-  getCalendarEvents().then(data => {
-    response.send(data);
+  readCalendars().then((calendars) => {
+    calendars.forEach((calendar) => {
+      calendar.events.forEach((event) => {
+        emma.sayCalendarEvent(calendar.calendarName, event);
+      });
+    });
   });
+  response.send(true);
 });
