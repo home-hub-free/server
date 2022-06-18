@@ -145,8 +145,8 @@ app.get('/get-google-calendar', (request, response) => {
         emma.sayCalendarEvent(calendar.calendarName, event);
       });
     });
+    response.send(calendars);
   });
-  response.send(true);
 });
 
 app.get('/emma-forecast', (request, response) => {
