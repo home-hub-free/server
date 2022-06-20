@@ -124,6 +124,10 @@ function cleanup() {
     sunrise: {},
     sunset: {}
   };
+
+  emma.autoForecasted.morning = false;
+  emma.autoForecasted.afternoon = false;
+  emma.autoForecasted.evening = false;
 }
 
 export function getSunsetTimeStamp() {
