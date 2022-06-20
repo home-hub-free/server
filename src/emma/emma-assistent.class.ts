@@ -24,6 +24,8 @@ class Emma {
     evening: false
   };
 
+  public latestSpeeches = [];
+
   private speechQueue: ISpeechPromise[] = [];
   private pollyOptions = {
     Engine: 'neural',
@@ -33,19 +35,15 @@ class Emma {
     VoiceId: 'Emma'
   };
 
-  constructor() {
-    // this.say('This the first message').then(() => {
-    //   console.log('1 Done')
-    // });
-    // this.say('This is the second message').then(() => {
-    //   console.log('2 Done')
-    // });
-    // this.say('This is the third message').then(() => {
-    //   console.log('3 Done');
-    // });
-  }
+  constructor() { }
 
   public say(text: string): Promise<boolean> {
+
+    this.latestSpeeches.push(new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + ' ' + text);
+    if (this.latestSpeeches.length > 10) {
+      this.latestSpeeches.shift();
+    }
+
     return new Promise((resolve, reject) => {
       this.speechQueue.push({
         text: text,
@@ -74,7 +72,6 @@ class Emma {
             if (this.speechQueue.length) this.playQueue();  
           });
         });
-        // sound.play(preSpeechSound, 1);
       } else {
         player.play(emmaSpeechPath, () => {
           this.speechQueue.shift();
@@ -150,10 +147,12 @@ class Emma {
 
 export const emma = new Emma();
 
-setInterval(() => {
-  // Play this sound and super low volume to keep the bluetooth speaker from turning off
-  player.play('./src/sounds/pre-notifier.mp3', {
-    // Command specific to raspberry audio player
-    mpg123: ['-f', 500]
-  });
-}, 60 * 1000);
+if (process.env.USER === 'pi') {
+  setInterval(() => {
+    // Play this sound and super low volume to keep the bluetooth speaker from turning off
+    player.play('./src/sounds/pre-notifier.mp3', {
+      // Command specific to raspberry audio player
+      mpg123: ['-f', 500]
+    });
+  }, 60 * 1000);
+}

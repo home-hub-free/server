@@ -45,12 +45,12 @@ export let forecast: IForecastData = {
 
 export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
   let hours = new Date().getHours();
-  if (hours >=0 && hours <= 11) {
+  if (hours >= 0 && hours <= 11) {
     return 'morning';
-  } else if (hours >= 12 && hours <=7) {
+  } else if (hours >= 12 && hours <= 18) {
     return 'afternoon';
   } else {
-    return 'evening';
+    return 'evening'
   }
 }
 
