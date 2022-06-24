@@ -9,24 +9,30 @@ jest.mock('../handlers/dailyEventsHandler', () => ({
 dailyEvents.sunrise.time.setHours(6);
 dailyEvents.sunset.time.setHours(19);
   
-// Look for a way to mock new Date since these test depend
-// on the current time of the day
 test('Device validating time ranges', () => {
+    jest.useFakeTimers();
+    // Before sunset
+    let fakeDate = new Date();
+    fakeDate.setHours(12);
+    jest.setSystemTime(fakeDate);
+
     let device = new Device(1, 'test', 'boolean');
     device.operationalRanges = ['sunset-23:59', '0:0-1:0'];
+
     device.notifyDevice = (value): Promise<boolean> => {
         device.value = value;
         return Promise.resolve(true);
     };
 
-    // Default value should be false
-    expect(device.value).toBe(false);
     device.autoTrigger(true);
-    // Should have been able to auto trigger
-    expect(device.value).toBe(true);
+    // Should have not been able to auto trigger since its outside operational
+    // time range
+    expect(device.value).toBe(false);
 
-    device.operationalRanges = ['sunset-23:59'];
-    device.value = false;
+    fakeDate.setHours(19);
+    jest.setSystemTime(fakeDate);
+
+    // Should have been able to auto trigger since its inside operational time rangess
     device.autoTrigger(true);
-    expect(device.value).toBe(false);
+    expect(device.value).toBe(true);
 });
