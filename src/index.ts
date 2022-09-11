@@ -55,9 +55,9 @@ app.use(cors());
 app.options('*', cors());
 
 app.listen(PORT, () => {
-  let ip = networkInterfaces()['en0'][1].address;
+  // let ip = networkInterfaces()['en0'][1].address;
   // console.log('IP info: ', ip);
-  console.log('App working at: ', ip + ':' + PORT);
+  console.log('App working at: ', PORT);
 });
 
 app.get('/get-daily-events', (request, response) => {
