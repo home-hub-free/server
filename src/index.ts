@@ -127,10 +127,13 @@ app.post('/declare-room', () => {})
 
 app.post('/declare-device', (request, response) => {
   let { id, name, type, operationalRanges } = request.body;
-  let device = new Device(id, name, type, operationalRanges || []);
-  devices.push(device);
-
-  response.send(true);
+  if (!devices.find(device => device.id === id)) {
+    let device = new Device(id, name, type, operationalRanges || []);
+    devices.push(device);
+    response.send(true);
+  } else {
+    response.send(false);
+  }
 });
 
 app.get('/request-weather', (request, response) => {
