@@ -117,10 +117,11 @@ function timeStringToDate(date: string): Date {
   let ISODate = new Date();
   let splitted = date.split(' ');
   let time = splitted[0];
-  let meridian = splitted[1];
+  let meridian: string = splitted[1];
 
   let timeSplitted = time.split(':');
-  let hour = parseInt(meridian === 'PM' ? timeSplitted[0] + 12 : timeSplitted[0]);
+  let intHours = parseInt(timeSplitted[0]);
+  let hour: number = meridian === 'PM' ? intHours + 12 : intHours;
   let minute = parseInt(timeSplitted[1]);
 
   ISODate.setHours(hour);

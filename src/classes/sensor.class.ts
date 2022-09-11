@@ -48,7 +48,7 @@ export class Sensor {
    */
   private updateBooleanSensor(value: any) {
     this.value = value === 1;
-    if (this.rooms.length === 0) {
+    if (!this.rooms.length) {
       return;
     }
 

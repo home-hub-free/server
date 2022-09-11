@@ -22,6 +22,7 @@ import {
 import { Device } from './classes/device.class';
 import { emma } from './emma/emma-assistent.class';
 import { readCalendars } from './handlers/googleCalendarHandler';
+import { networkInterfaces } from 'os';
 
 /**
  * This project requires to be setup with a designated local ip address so the network of 
@@ -54,7 +55,9 @@ app.use(cors());
 app.options('*', cors());
 
 app.listen(PORT, () => {
-  console.log('App working at: ', PORT);
+  let ip = networkInterfaces()['en0'][1].address;
+  // console.log('IP info: ', ip);
+  console.log('App working at: ', ip + ':' + PORT);
 });
 
 app.get('/get-daily-events', (request, response) => {
@@ -128,10 +131,6 @@ app.post('/declare-device', (request, response) => {
   devices.push(device);
 
   response.send(true);
-});
-
-app.post('/declare-sensor', () => {
-
 });
 
 app.get('/request-weather', (request, response) => {
