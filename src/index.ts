@@ -137,7 +137,9 @@ app.post('/declare-device', (request, response) => {
 });
 
 app.get('/request-weather', (request, response) => {
-  emma.sayWeatherForecast();
+  emma.sayWeatherForecast().then((sentence) => {
+    response.send(sentence);
+  });
 });
 
 app.get('/get-google-calendar', (request, response) => {

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { WeatherDescriptions } from '../weather-descriptions';
 const WeatherApiURL = 'https://api.weatherapi.com/v1/';
 const WeatherApiKey = process.env.WEATHER_API_KEY || '';
-// const ipAddress = process.env.IP_ADDRESS || '';
+const WeatherApiQuery = process.env.WEATHER_API_QUERY || '';
 
 export interface IForecastData {
   maxTemp: {
@@ -59,7 +59,7 @@ export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
  * @returns Simplified data from the weather API
  */
 export function updateWeatherData(): Promise<any> {
-  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=Santiago De Queretaro&days=1&aqi=no&alerts=no`;
+  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=${WeatherApiQuery}&days=1&aqi=no&alerts=no`;
   return new Promise((resolve, reject) => {
     axios.get(url)
       .then((result) => {

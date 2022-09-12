@@ -87,10 +87,10 @@ class Emma {
     if (autoTriggered) {
       this.autoForecasted[dayTimeWord] = true;
     }
-    updateWeatherData().then((data) => {
+    return updateWeatherData().then((data) => {
       let sentence = this.buildForecastSentence(data.forecast);
-      this.say(sentence).then(() => {
-      });
+      this.say(sentence);
+      return sentence;
     });
   }
 
