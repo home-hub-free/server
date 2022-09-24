@@ -7,6 +7,11 @@ const DEFAULT_TIMER = 1000 * 60;
 
 type DeviceType = 'boolean' | 'value';
 
+export const DeviceTypesToDataTypes = {
+  'light': 'boolean',
+  'dimmable-light': 'value',
+};
+
 export interface DeviceData {
   id: number,
   name: string,
@@ -35,18 +40,18 @@ export class Device {
   // This needs to change to a single endpoint to notify the devices
   // changing this requires to re-compile and re-flash all the code 
   // running in the devices which i am to lazy to do at the moment
-  private _endpoint: string;
+  // private _endpoint: string;
   private _timer: NodeJS.Timeout;
 
   constructor(id: number, name: string, type: DeviceType, operationalRanges?: string[]) {
     switch (type) {
       case 'boolean':
         this.value = false;
-        this._endpoint = 'toggle';
+        // this._endpoint = 'set';
         break;
       case 'value':
         this.value = 0;
-        this._endpoint = 'set';
+        // this._endpoint = 'set';
         break;
     }
 
@@ -112,7 +117,7 @@ export class Device {
         resolve(false);
         return;
       }
-      axios.get(`http://${this.ip}/${this._endpoint}?value=${value}`).then(() => {
+      axios.get(`http://${this.ip}/set?value=${value}`).then(() => {
         this.value = value;
         // this.storeValue();
         log(EVENT_TYPES.device_triggered, [`Device triggered ${this.name}, ${this.value}`]);

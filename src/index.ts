@@ -3,11 +3,11 @@ dotenv.config();
 
 import express, { Express } from 'express';
 import cors from 'cors';
-import storage from 'node-persist';
-import { updateSensor } from './handlers/sensorHandler';
+// import storage from 'node-persist';
+import { getSensorsData, updateSensor } from './handlers/sensorHandler';
 import { getRoomsStates } from './handlers/roomHandler';
 import { initLocalSensors } from './local-sensors';
-import { log, EVENT_TYPES } from './logger';
+// import { log, EVENT_TYPES } from './logger';
 import {
   assignDeviceIpAddress,
   devices,
@@ -19,10 +19,10 @@ import {
   getDailyEvents,
   updateDailyGoogleCalendarEvents,
 } from './handlers/dailyEventsHandler';
-import { Device } from './classes/device.class';
+import { Device, DeviceTypesToDataTypes } from './classes/device.class';
 import { emma } from './emma/emma-assistent.class';
 import { readCalendars } from './handlers/googleCalendarHandler';
-import { networkInterfaces } from 'os';
+// import { networkInterfaces } from 'os';
 
 /**
  * This project requires to be setup with a designated local ip address so the network of 
@@ -32,18 +32,19 @@ import { networkInterfaces } from 'os';
 const app: Express = express();
 const PORT = 8080;
 
-storage.init({
-  dir: './data',
-  stringify: JSON.stringify,
-  parse: JSON.parse,
-  encoding: 'utf8',
-  logging: false,  // can also be custom logging function
-  ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
-  expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
-  // in some cases, you (or some other service) might add non-valid storage files to your
-  // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
-  forgiveParseErrors: false
-});
+// Will Change to DB system
+// storage.init({
+//   dir: './data',
+//   stringify: JSON.stringify,
+//   parse: JSON.parse,
+//   encoding: 'utf8',
+//   logging: false,  // can also be custom logging function
+//   ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
+//   expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
+//   // in some cases, you (or some other service) might add non-valid storage files to your
+//   // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
+//   forgiveParseErrors: false
+// });
 
 updateAstroEvents();
 initDailyDevices();
@@ -72,20 +73,27 @@ app.get('/get-room-states', (request, response) => {
   response.send(getRoomsStates());
 });
 
+app.get('/get-sensors', (request, response) => {
+  response.send(getSensorsData());
+});
+
 app.post('/sensor-signal', (request, response) => {
   updateSensor(request.body.id, request.body.value);
   response.send(true);
 });
 
-app.post('/ping', (request, response) => {
-  log(EVENT_TYPES.ping, [request.body.sensor]);
-  response.send(true);
-});
+// app.post('/ping', (request, response) => {
+//   log(EVENT_TYPES.ping, [request.body.sensor]);
+//   response.send(true);
+// });
 
-app.post('/add-device-ip', (request, response) => {
-  assignDeviceIpAddress(request.body.device, request.ip);
-  response.send(true);
-});
+// app.post('/add-device-ip', (request, response) => {
+//   let device = devices.find((device) => device.id === request.body.id);
+//   // assignDeviceIpAddress(request.body.device, request.ip);
+//   // response.send(true);
+// });
+
+app.post('/device-ping', (request, response) => {})
 
 app.post('/manual-control', (request, response) => {
   let device = devices.find(device => device.id === request.body.device);
@@ -100,40 +108,51 @@ app.post('/manual-control', (request, response) => {
   }
 });
 
-app.post('/set-daily-event', (request, response) => {
-  // let name = request.body.name;
-  // let description = request.body.description;
-  // let deviceId = request.body.device;
-  // let value = request.body.value;
-  // let date = request.body.date;
-  // if (!name || !description || !deviceId || !value) {
-  //   response.send(false);
-  // } else {
-  //   let device = devices.find((device) => device.id === deviceId);
-  //   if (device) {
-  //     addDailyEvent(name, date, () => {
-  //       autoTrigger(device, value);
-  //     });
-  //     response.send(true);
-  //   } else {
-  //     response.send(false);
-  //   }
-  // }
-});
+// app.post('/set-daily-event', (request, response) => {
+//   // let name = request.body.name;
+//   // let description = request.body.description;
+//   // let deviceId = request.body.device;
+//   // let value = request.body.value;
+//   // let date = request.body.date;
+//   // if (!name || !description || !deviceId || !value) {
+//   //   response.send(false);
+//   // } else {
+//   //   let device = devices.find((device) => device.id === deviceId);
+//   //   if (device) {
+//   //     addDailyEvent(name, date, () => {
+//   //       autoTrigger(device, value);
+//   //     });
+//   //     response.send(true);
+//   //   } else {
+//   //     response.send(false);
+//   //   }
+//   // }
+// });
 
 app.post('/declare-sensor', () => {})
 
-app.post('/declare-room', () => {})
+// app.post('/declare-room', () => {})
 
-app.post('/declare-device', (request, response) => {
-  let { id, name, type, operationalRanges } = request.body;
-  if (!devices.find(device => device.id === id)) {
-    let device = new Device(id, name, type, operationalRanges || []);
-    devices.push(device);
+app.post('/device-declare', (request, response) => {
+  let { id, name } = request.body;
+  let device = devices.find(device => device.id === id);
+
+  if (device) {
     response.send(true);
   } else {
-    response.send(false);
+    device = new Device(id, name, DeviceTypesToDataTypes[name]);
+    devices.push(device);
+    assignDeviceIpAddress(id, request.ip);
+    response.send(true);
   }
+  // if (!devices.find(device => device.id === id)) {
+  //   console.log('Dis boi is new yo: ', request.body);
+  //   // let device = new Device(id, name, type, operationalRanges || []);
+  //   // devices.push(device);
+  //   response.send(true);
+  // } else {
+  //   response.send(false);
+  // }
 });
 
 app.get('/request-weather', (request, response) => {
