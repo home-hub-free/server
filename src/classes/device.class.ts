@@ -36,22 +36,15 @@ export class Device {
    * MM: 0-59
    */
   public operationalRanges: string[];
-
-  // This needs to change to a single endpoint to notify the devices
-  // changing this requires to re-compile and re-flash all the code 
-  // running in the devices which i am to lazy to do at the moment
-  // private _endpoint: string;
   private _timer: NodeJS.Timeout;
 
   constructor(id: number, name: string, type: DeviceType, operationalRanges?: string[]) {
     switch (type) {
       case 'boolean':
         this.value = false;
-        // this._endpoint = 'set';
         break;
       case 'value':
         this.value = 0;
-        // this._endpoint = 'set';
         break;
     }
 
@@ -84,7 +77,6 @@ export class Device {
         clearTimeout(this._timer)
         this._timer = null;
       };
-
       return success;
     });
   }
@@ -124,7 +116,8 @@ export class Device {
         resolve(true);
       }).catch((reason) => {
         log(EVENT_TYPES.error, [`Device not found 404, ${this.name}, ${reason}`]);
-        resolve(false);
+        reject(false);
+        // resolve(false);
       });
     });
   }

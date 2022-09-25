@@ -1,167 +1,63 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import express, { Express } from 'express';
-import cors from 'cors';
-// import storage from 'node-persist';
-import { getSensorsData, updateSensor } from './handlers/sensorHandler';
-import { getRoomsStates } from './handlers/roomHandler';
-import { initLocalSensors } from './local-sensors';
-// import { log, EVENT_TYPES } from './logger';
+import express, { Express } from "express";
+import cors from "cors";
+import { getRoomsStates } from "./handlers/roomHandler";
+import { initLocalSensors } from "./local-sensors";
 import {
-  assignDeviceIpAddress,
-  devices,
-  getDevices,
-  initDailyDevices
-} from './handlers/deviceHandler';
+  initDailyDevices,
+} from "./handlers/deviceHandler";
 import {
   updateAstroEvents,
   getDailyEvents,
   updateDailyGoogleCalendarEvents,
-} from './handlers/dailyEventsHandler';
-import { Device, DeviceTypesToDataTypes } from './classes/device.class';
-import { emma } from './emma/emma-assistent.class';
-import { readCalendars } from './handlers/googleCalendarHandler';
-// import { networkInterfaces } from 'os';
+} from "./handlers/dailyEventsHandler";
+import { emma } from "./emma/emma-assistent.class";
+import { readCalendars } from "./handlers/googleCalendarHandler";
+import { initSensorRoutes } from "./routes/sensor-routes";
+import { initDeviceRoutes } from "./routes/device-routes";
 
 /**
- * This project requires to be setup with a designated local ip address so the network of 
+ * This project requires to be setup with a designated local ip address so the network of
  * devices can communicate directly to it
  */
 
 const app: Express = express();
 const PORT = 8080;
 
-// Will Change to DB system
-// storage.init({
-//   dir: './data',
-//   stringify: JSON.stringify,
-//   parse: JSON.parse,
-//   encoding: 'utf8',
-//   logging: false,  // can also be custom logging function
-//   ttl: false, // ttl* [NEW], can be true for 24h default or a number in MILLISECONDS or a valid Javascript Date object
-//   expiredInterval: 2 * 60 * 1000, // every 2 minutes the process will clean-up the expired cache
-//   // in some cases, you (or some other service) might add non-valid storage files to your
-//   // storage dir, i.e. Google Drive, make this true if you'd like to ignore these files and not throw an error
-//   forgiveParseErrors: false
-// });
-
 updateAstroEvents();
 initDailyDevices();
 initLocalSensors();
 updateDailyGoogleCalendarEvents();
 
+
 app.use(express.json());
 app.use(cors());
-app.options('*', cors());
+app.options("*", cors());
+
+initSensorRoutes(app);
+initDeviceRoutes(app);
 
 app.listen(PORT, () => {
-  // let ip = networkInterfaces()['en0'][1].address;
-  // console.log('IP info: ', ip);
-  console.log('App working at: ', PORT);
+  console.log("App working at: ", PORT);
 });
 
-app.get('/get-daily-events', (request, response) => {
+app.get("/get-daily-events", (request, response) => {
   response.send(getDailyEvents());
 });
 
-app.get('/get-devices', (request, response) => {
-  response.send(getDevices());
-});
-
-app.get('/get-room-states', (request, response) => {
+app.get("/get-room-states", (request, response) => {
   response.send(getRoomsStates());
 });
 
-app.get('/get-sensors', (request, response) => {
-  response.send(getSensorsData());
-});
-
-app.post('/sensor-signal', (request, response) => {
-  updateSensor(request.body.id, request.body.value);
-  response.send(true);
-});
-
-// app.post('/ping', (request, response) => {
-//   log(EVENT_TYPES.ping, [request.body.sensor]);
-//   response.send(true);
-// });
-
-// app.post('/add-device-ip', (request, response) => {
-//   let device = devices.find((device) => device.id === request.body.id);
-//   // assignDeviceIpAddress(request.body.device, request.ip);
-//   // response.send(true);
-// });
-
-app.post('/device-ping', (request, response) => {})
-
-app.post('/manual-control', (request, response) => {
-  let device = devices.find(device => device.id === request.body.device);
-  if (device) {
-    // Avoid changing value type devices to manual mode for now
-    device.manualTrigger(request.body.value).then(() => {
-      response.send(true);
-      if (!request.body.manual) device.manual = false;
-    }).catch(() => {
-      response.send(false);
-    });
-  }
-});
-
-// app.post('/set-daily-event', (request, response) => {
-//   // let name = request.body.name;
-//   // let description = request.body.description;
-//   // let deviceId = request.body.device;
-//   // let value = request.body.value;
-//   // let date = request.body.date;
-//   // if (!name || !description || !deviceId || !value) {
-//   //   response.send(false);
-//   // } else {
-//   //   let device = devices.find((device) => device.id === deviceId);
-//   //   if (device) {
-//   //     addDailyEvent(name, date, () => {
-//   //       autoTrigger(device, value);
-//   //     });
-//   //     response.send(true);
-//   //   } else {
-//   //     response.send(false);
-//   //   }
-//   // }
-// });
-
-app.post('/declare-sensor', () => {})
-
-// app.post('/declare-room', () => {})
-
-app.post('/device-declare', (request, response) => {
-  let { id, name } = request.body;
-  let device = devices.find(device => device.id === id);
-
-  if (device) {
-    response.send(true);
-  } else {
-    device = new Device(id, name, DeviceTypesToDataTypes[name]);
-    devices.push(device);
-    assignDeviceIpAddress(id, request.ip);
-    response.send(true);
-  }
-  // if (!devices.find(device => device.id === id)) {
-  //   console.log('Dis boi is new yo: ', request.body);
-  //   // let device = new Device(id, name, type, operationalRanges || []);
-  //   // devices.push(device);
-  //   response.send(true);
-  // } else {
-  //   response.send(false);
-  // }
-});
-
-app.get('/request-weather', (request, response) => {
+app.get("/request-weather", (request, response) => {
   emma.sayWeatherForecast().then((sentence) => {
     response.send(sentence);
   });
 });
 
-app.get('/get-google-calendar', (request, response) => {
+app.get("/get-google-calendar", (request, response) => {
   readCalendars().then((calendars) => {
     calendars.forEach((calendar) => {
       calendar.events.forEach((event) => {
@@ -172,10 +68,9 @@ app.get('/get-google-calendar', (request, response) => {
   });
 });
 
-app.get('/emma', (request, response) => {
+app.get("/emma", (request, response) => {
   let forecasted = emma.autoForecasted;
-  let latest = emma.latestSpeeches
+  let latest = emma.latestSpeeches;
 
-  response.send({forecasted, latest});
+  response.send({ forecasted, latest });
 });
-

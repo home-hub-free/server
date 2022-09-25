@@ -1,24 +1,29 @@
 import { Room } from "./room.class";
 
+export const SensorTypesToDataTypes = {
+  'motion': 'boolean',
+  'temp/humidity': 'value'
+}
+
 export class Sensor {
 
   id: number;
   type: 'boolean' | 'value';
-  description: string;
+  name: string;
   rooms: Room[];
   value: any;
   setAs: string[];
 
   constructor(
     id: number,
-    type: 'boolean' | 'value',
-    description: string,
-    rooms: Room[],
+    name?: string,
+    type?: 'boolean' | 'value',
+    rooms?: Room[],
     setAs?: string[]
     ) {
     this.id = id;
     this.type = type;
-    this.description = description;
+    this.name = name;
     this.rooms = rooms;
     this.setAs = setAs || null;
 
@@ -48,13 +53,6 @@ export class Sensor {
    */
   private updateBooleanSensor(value: any) {
     this.value = value === 1;
-    if (!this.rooms.length) {
-      return;
-    }
-
-    this.rooms.forEach((room) => {
-      room.activate(this.value);
-    });
   }
 
   /**
@@ -64,28 +62,5 @@ export class Sensor {
    */
   private updateValueSensor(value: any) {
     this.value = value;
-    if (this.rooms.length === 0) {
-      return;
-    }
-    this.rooms.forEach((room) => {
-      room.updateRoomDataRef((data) => {
-        // Implement this before adding new type of value sensors
-        // let splitValue = this.value.split(':');
-        // splitValue.forEach((val, index) => {
-        //   if (this.setAs[index] && splitValue[index]) {
-        //     let key = this.setAs[index];
-        //     data[key] = val;
-        //   }
-        // });
-
-        // DEPRECATE
-        // Legacy code to keep the FE working
-        data[`sensor-${this.id}`] = {
-          id: this.id,
-          value: value,
-          description: this.description
-        };
-      });
-    });
   }
 }

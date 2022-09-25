@@ -6,40 +6,8 @@ import {
   setSunsetEvent
 } from './dailyEventsHandler';
 
-/**
- * TODO: Re-write this so that device data is not hardcoded, instead every device should be responsible
- * for communicating its id, name and data type, attempt to change all the app to that concept for
- * Devices, Sensors, Rooms should also be user defined not code defined
- */
-export const devices: Device[] = [
-  // new Device(1, 'Kitchen lights (down)', 'boolean'),
-  // new Device(2, 'Kitchen lights (up)', 'boolean'),
-  // new Device(3, 'Livingroom blinds (right)', 'value'),
-  // new Device(4, 'Livingroom blinds (left)', 'value'),
-  // new Device(5, 'Dinning/Living room lamp', 'boolean'),
-  // new Device(6, 'Kitchen Fan', 'value')
-];
-
-// // Kitchen lights up
-// devices[1].operationalRanges = ['sunrise-23:59'];
-// // Dinning room lamp
-// devices[4].operationalRanges = ['sunset-23:59', '0:0-1:0'];
-
-/**
- * Used once for new years, ill keep this code laying around
- */
-export function randomLights() {
-  console.log(devices);
-  let lights = [devices[0], devices[1], devices[4]];
-  setInterval(() => {
-    lights.forEach((light) => {
-      light.manualTrigger(true);
-      setTimeout(() => {
-        light.manualTrigger(false);
-      }, 100 * (Math.floor(Math.random() * (5 - 1 + 1) + 1)));
-    });
-  }, 800);
-}
+// These get populated as devices join the local network
+export const devices: Device[] = [];
 
 /**
  * Initializes the fixed executions of daily devices
@@ -68,7 +36,6 @@ export function assignDeviceIpAddress(deviceId: number, address: string) {
   let ip = chunks[chunks.length - 1];
   if (device && !device.ip) {
     device.ip = ip;
-    // device.assignStorageValue();
     log(EVENT_TYPES.device_detected, [deviceId, device.name, ip]);
   }
 
