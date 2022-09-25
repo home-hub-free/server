@@ -1,4 +1,5 @@
 import { Room } from "./room.class";
+import { io } from '../handlers/websocketHandler';
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
@@ -13,6 +14,7 @@ export class Sensor {
   rooms: Room[];
   value: any;
   setAs: string[];
+  timeout: NodeJS.Timeout;
 
   constructor(
     id: number,
@@ -52,7 +54,26 @@ export class Sensor {
    * @param {boolean} value Sensor state true/false
    */
   private updateBooleanSensor(value: any) {
-    this.value = value === 1;
+    let newValue = value === 1;
+    // Cancel current timeout and reset
+    if (newValue) {
+      if (this.timeout) {
+        clearTimeout(this.timeout)
+      } else {
+        io.emit('sensor-update', {
+          id: this.id,
+          value: true,
+        });
+      }
+      this.timeout = setTimeout(() => {
+        this.value = false;
+        this.timeout = null;
+        io.emit('sensor-update', {
+          id: this.id,
+          value: false,
+        });
+      }, 30 * 1000);
+    }
   }
 
   /**

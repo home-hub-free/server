@@ -1,10 +1,9 @@
-import { log, EVENT_TYPES } from '../logger';
-import { Device, DeviceData } from '../classes/device.class';
+import { log, EVENT_TYPES } from "../logger";
+import { Device, DeviceData } from "../classes/device.class";
 import {
-  dailyEvents,
   setSunriseEvent,
-  setSunsetEvent
-} from './dailyEventsHandler';
+  setSunsetEvent,
+} from "./dailyEventsHandler";
 
 // These get populated as devices join the local network
 export const devices: Device[] = [];
@@ -16,11 +15,11 @@ export function initDailyDevices() {
   let val = 35;
   let blinds = devices.filter((device) => device.id === 3 || device.id === 4);
   setSunriseEvent(`Open living room blinds at ${val}%`, () => {
-    blinds.forEach(dev => dev.autoTrigger(val));
+    blinds.forEach((dev) => dev.autoTrigger(val));
   });
 
-  setSunsetEvent('Close living room blinds', () => {
-    blinds.forEach(dev => dev.autoTrigger(0));
+  setSunsetEvent("Close living room blinds", () => {
+    blinds.forEach((dev) => dev.autoTrigger(0));
   });
 }
 
@@ -32,7 +31,7 @@ export function initDailyDevices() {
  */
 export function assignDeviceIpAddress(deviceId: number, address: string) {
   let device = devices.find((device) => device.id == deviceId);
-  let chunks = address.split(':');
+  let chunks = address.split(":");
   let ip = chunks[chunks.length - 1];
   if (device && !device.ip) {
     device.ip = ip;
@@ -46,15 +45,15 @@ export function assignDeviceIpAddress(deviceId: number, address: string) {
 }
 
 export function getDevices(): DeviceData[] {
-  return Object.values(devices).map((device: Device) => {
-    let data: DeviceData = {
-      id: device.id,
-      name: device.name,
-      value: device.value,
-      type: device.type,
-      manual: device.manual
-    };
+  return Object.values(devices).map(buildClientDeviceData);
+}
 
-    return data;
-  });
+export function buildClientDeviceData(device: Device): DeviceData {
+  return {
+    id: device.id,
+    name: device.name,
+    value: device.value,
+    type: device.type,
+    manual: device.manual,
+  };
 }

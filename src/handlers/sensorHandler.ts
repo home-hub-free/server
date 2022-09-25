@@ -1,5 +1,4 @@
 import { Sensor } from '../classes/sensor.class';
-// import { rooms } from "./roomHandler";
 
 // These get populated as sensors join the local network
 export const sensors: Sensor[] = [];
@@ -10,14 +9,14 @@ export function updateSensor(sensorId: number, value: any) {
 }
 
 export function getSensorsData() {
-  let sensorsData = sensors.map((sensor: Sensor) => {
-    return {
-      id: sensor.id,
-      type: sensor.type,
-      name: sensor.name,
-      value: sensor.value
-    }
-  });
+  return sensors.map(buildClientSensorData);
+}
 
-  return sensorsData;
+export function buildClientSensorData(sensor: Sensor) {
+  return {
+    id: sensor.id,
+    type: sensor.type,
+    name: sensor.name,
+    value: sensor.value
+  };
 }

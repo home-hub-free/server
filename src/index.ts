@@ -18,6 +18,10 @@ import { readCalendars } from "./handlers/googleCalendarHandler";
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 
+import { Server } from 'socket.io';
+import http from 'http';
+import { initWebSockets } from "./handlers/websocketHandler";
+
 /**
  * This project requires to be setup with a designated local ip address so the network of
  * devices can communicate directly to it
@@ -35,13 +39,15 @@ updateDailyGoogleCalendarEvents();
 app.use(express.json());
 app.use(cors());
 app.options("*", cors());
+const server = http.createServer(app);
 
-initSensorRoutes(app);
-initDeviceRoutes(app);
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log("App working at: ", PORT);
 });
+
+initWebSockets(server);
+initSensorRoutes(app);
+initDeviceRoutes(app);
 
 app.get("/get-daily-events", (request, response) => {
   response.send(getDailyEvents());

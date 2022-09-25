@@ -1,6 +1,7 @@
 import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
-import { getSensorsData, sensors } from "../handlers/sensorHandler";
+import { buildClientSensorData, getSensorsData, sensors } from "../handlers/sensorHandler";
 import { Express } from "express";
+import { io } from "../handlers/websocketHandler";
 
 export function initSensorRoutes(app: Express) {
   app.get("/get-sensors", (request, response) => {
@@ -16,6 +17,7 @@ export function initSensorRoutes(app: Express) {
       response.send(true);
     } else {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
+      io.emit('sensor-declare', buildClientSensorData(sensor));
       sensors.push(sensor);
       response.send(true);
     }
@@ -25,7 +27,7 @@ export function initSensorRoutes(app: Express) {
   app.post("/sensor-update", (request, response) => {
     let { id } = request.body;
     let sensor = sensors.find((sensor) => sensor.id === id);
-    if (sensor) {
+    if (sensor && request.body.value) {
       sensor.update(request.body.value);
       response.send(true);
     } else {
