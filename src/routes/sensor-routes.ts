@@ -3,9 +3,22 @@ import { getSensorsData, sensors } from "../handlers/sensorHandler";
 import { Express } from "express";
 
 export function initSensorRoutes(app: Express) {
-
   app.get("/get-sensors", (request, response) => {
     response.send(getSensorsData());
+  });
+
+  // Called when a sensor connects to the networks and relays its infromation
+  // to the server (Also used as a ping function each 10 seconds)
+  app.post("/sensor-declare", (request, response) => {
+    let { id, name } = request.body;
+    let sensor = sensors.find((sensor) => sensor.id === id);
+    if (sensor) {
+      response.send(true);
+    } else {
+      sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
+      sensors.push(sensor);
+      response.send(true);
+    }
   });
 
   // Called whenever a sensor's data is updated and its notified to the server
@@ -17,20 +30,6 @@ export function initSensorRoutes(app: Express) {
       response.send(true);
     } else {
       response.send(false);
-    }
-  });
-
-  // Called when a sensor connects to the networks and relays its infromation
-  // to the server
-  app.post("/sensor-declare", (request, response) => {
-    let { id, name } = request.body;
-    let sensor = sensors.find((sensor) => sensor.id === id);
-    if (sensor) {
-      response.send(true);
-    } else {
-      sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
-      sensors.push(sensor);
-      response.send(true);
     }
   });
 }
