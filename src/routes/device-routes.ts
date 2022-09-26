@@ -43,6 +43,8 @@ export function initDeviceRoutes(app: Express) {
         .catch(() => {
           response.send(false);
         });
+    } else {
+      response.send(false);
     }
   });
 }

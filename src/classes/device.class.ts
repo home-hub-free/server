@@ -81,27 +81,6 @@ export class Device {
     });
   }
 
-  /**
-   * Sets a start and end value with a within a 1 minute time range, if a timer is already initialized
-   * the start value will beignored unless overrideCurrent is set to true, these values are applied
-   * trough auto-trigger conditions.
-   * @param startValue Value that will be applied if there is not timmer already initialized
-   * @param endValue Value that will applied after 1 minute
-   */
-  timerTrigger(startValue: any, endValue: any) {
-    if (this._timer) {
-      clearTimeout(this._timer);
-      this._timer = null;
-    } else {
-      this.autoTrigger(startValue);
-    }
-    this._timer = setTimeout(() => {
-      this.autoTrigger(endValue);
-      this._timer = null;
-    }, DEFAULT_TIMER);
-  }
-
-
   notifyDevice(value: any): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.ip) {

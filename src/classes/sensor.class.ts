@@ -1,4 +1,4 @@
-import { Room } from "./room.class";
+// import { Room } from "./room.class";
 import { io } from '../handlers/websocketHandler';
 
 export const SensorTypesToDataTypes = {
@@ -11,7 +11,6 @@ export class Sensor {
   id: number;
   type: 'boolean' | 'value';
   name: string;
-  rooms: Room[];
   value: any;
   setAs: string[];
   timeout: NodeJS.Timeout;
@@ -20,13 +19,11 @@ export class Sensor {
     id: number,
     name?: string,
     type?: 'boolean' | 'value',
-    rooms?: Room[],
     setAs?: string[]
     ) {
     this.id = id;
     this.type = type;
     this.name = name;
-    this.rooms = rooms;
     this.setAs = setAs || null;
 
     switch (type) {
@@ -50,8 +47,8 @@ export class Sensor {
   }
 
   /**
-   * Boolean sensors are only used to update active state in rooms
-   * @param {boolean} value Sensor state true/false
+   * Boolean sensors are basically motion sensors (for now)
+   * so we keep an activity timmer for 1 minute
    */
   private updateBooleanSensor(value: any) {
     let newValue = value === 1;
@@ -72,13 +69,15 @@ export class Sensor {
           id: this.id,
           value: false,
         });
-      }, 30 * 1000);
+      }, 60 * 1000);
     }
   }
 
   /**
    * Value sensors will be used to store data, like temp
-   * humidity, light levels, 
+   * humidity, light levels, basically any sensor that
+   * requires a more complex way of reading its data gets
+   * updated here
    * @param {*} value Value gathered from sensor
    */
   private updateValueSensor(value: any) {
