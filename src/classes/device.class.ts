@@ -90,7 +90,6 @@ export class Device {
       }
       axios.get(`http://${this.ip}/set?value=${value}`).then(() => {
         this.value = value;
-        // this.storeValue();
         log(EVENT_TYPES.device_triggered, [`Device triggered ${this.name}, ${this.value}`]);
         resolve(true);
       }).catch((reason) => {

@@ -22,7 +22,7 @@ export function initDeviceRoutes(app: Express) {
       response.send(true);
     } else {
       device = new Device(id, name, DeviceTypesToDataTypes[name]);
-      io.emit('device-declare', buildClientDeviceData(device));
+      io.emit("device-declare", buildClientDeviceData(device));
       devices.push(device);
       assignDeviceIpAddress(id, request.ip);
       response.send(true);
@@ -38,6 +38,10 @@ export function initDeviceRoutes(app: Express) {
         .manualTrigger(request.body.value)
         .then(() => {
           response.send(true);
+          io.emit("device-update", {
+            id: device.id,
+            value: request.body.value,
+          });
           if (!request.body.manual) device.manual = false;
         })
         .catch(() => {

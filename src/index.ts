@@ -18,7 +18,6 @@ import { readCalendars } from "./handlers/googleCalendarHandler";
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 
-import { Server } from 'socket.io';
 import http from 'http';
 import { initWebSockets } from "./handlers/websocketHandler";
 

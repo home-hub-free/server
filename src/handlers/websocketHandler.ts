@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import http from 'http';
+import http from "http";
 export let io;
 
 export function initWebSockets(server: http.Server) {
