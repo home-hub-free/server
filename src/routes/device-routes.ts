@@ -19,23 +19,21 @@ export function initDeviceRoutes(app: Express) {
   app.post("/device-declare", (request, response) => {
     let { id, name } = request.body;
     let device = devices.find((device) => device.id === id);
+    let dbStoredData = DevicesDB.get(id);
 
-    if (device) {
-      response.send(true);
-    } else {
-      let deviceData = DevicesDB.get(id);
+    if (!device) {
       device = new Device(id, name, DeviceTypesToDataTypes[name]);
-      if (deviceData) mergeDeviceData(device, deviceData);      
-
+      if (dbStoredData) mergeDeviceData(device, dbStoredData);
       io.emit("device-declare", buildClientDeviceData(device));
       devices.push(device);
       assignDeviceIpAddress(id, request.ip);
-      response.send(true);
+    } else {
     }
+    response.send(true);
   });
 
   // Client side app trying to interact with a device
-  app.post('/device-update', (request, response) => {
+  app.post("/device-update", (request, response) => {
     let device = devices.find((device) => device.id === request.body.id);
     if (!device) {
       return response.send(false);
@@ -56,21 +54,22 @@ export function initDeviceRoutes(app: Express) {
   });
 
   // Updates information about a device, this information live in DB
-  app.post('/device-data-set', (request, response) => {
-    let device = devices.find(device => device.id === request.body.id);
+  app.post("/device-data-set", (request, response) => {
+    let device = devices.find((device) => device.id === request.body.id);
     if (!device) return response.send(false);
     if (!request.body.data) return response.send(false);
 
-    let deviceData = DevicesDB.get(device.id);
-    if (!deviceData) {
-      DevicesDB.set(device.id, request.body.data);
+    let incomingData = request.body.data;
+    let dbStoredData = DevicesDB.get(device.id);
+    if (!dbStoredData) {
+      DevicesDB.set(device.id, incomingData);
     } else {
-      Object.keys(request.body.data).forEach((key: string) => {
-        let value = request.body.data[key];
-        deviceData[key] = value;
+      Object.keys(incomingData).forEach((key: string) => {
+        dbStoredData[key] = incomingData[key];
       });
-      DevicesDB.set(device.id, deviceData);
+      DevicesDB.set(device.id, dbStoredData);
     }
+    mergeDeviceData(device, incomingData);
     response.send(true);
   });
 }

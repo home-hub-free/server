@@ -8,7 +8,7 @@ export const SensorTypesToDataTypes = {
 
 export class Sensor {
 
-  id: number;
+  id: string;
   type: 'boolean' | 'value';
   name: string;
   value: any;
@@ -16,7 +16,7 @@ export class Sensor {
   timeout: NodeJS.Timeout;
 
   constructor(
-    id: number,
+    id: string,
     name?: string,
     type?: 'boolean' | 'value',
     setAs?: string[]

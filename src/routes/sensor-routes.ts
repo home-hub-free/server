@@ -1,5 +1,5 @@
 import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
-import { buildClientSensorData, getSensorsData, sensors } from "../handlers/sensorHandler";
+import { buildClientSensorData, getSensorsData, mergeSensorData, sensors, SensorsDB } from "../handlers/sensorHandler";
 import { Express } from "express";
 import { io } from "../handlers/websocketHandler";
 
@@ -13,14 +13,15 @@ export function initSensorRoutes(app: Express) {
   app.post("/sensor-declare", (request, response) => {
     let { id, name } = request.body;
     let sensor = sensors.find((sensor) => sensor.id === id);
-    if (sensor) {
-      response.send(true);
-    } else {
+    let dbStoredData = SensorsDB.get(id);
+
+    if (!sensor) {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
+      if (dbStoredData) mergeSensorData(sensor, dbStoredData);
       io.emit('sensor-declare', buildClientSensorData(sensor));
       sensors.push(sensor);
-      response.send(true);
     }
+    response.send(true);
   });
 
   // Called whenever a sensor's data is updated and its notified to the server
@@ -33,5 +34,25 @@ export function initSensorRoutes(app: Express) {
     } else {
       response.send(false);
     }
+  });
+
+  // Updates information about sensor that lives in DB
+  app.post('/sensor-data-set', (request, response) => {
+    let sensor = sensors.find((sensor) => sensor.id === request.body.id);
+    if (!sensor) return response.send(false);
+    if (!request.body.data) response.send(false);
+
+    let incomingData = request.body.data;
+    let dbStoredData = SensorsDB.get(sensor.id);
+    if (!dbStoredData) {
+      SensorsDB.set(sensor.id, incomingData);
+    } else {
+      Object.keys(incomingData).forEach(key => {
+        dbStoredData[key] = incomingData[key]
+      });
+      SensorsDB.set(sensor.id, dbStoredData);
+    }
+    mergeSensorData(sensor, incomingData);
+    response.send(true);
   });
 }
