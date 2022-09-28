@@ -16,7 +16,7 @@ test('Device validating time ranges', () => {
     fakeDate.setHours(12);
     jest.setSystemTime(fakeDate);
 
-    let device = new Device(1, 'test', 'boolean');
+    let device = new Device('1', 'test', 'boolean');
     device.operationalRanges = ['sunset-23:59', '0:0-1:0'];
 
     device.notifyDevice = (value): Promise<boolean> => {

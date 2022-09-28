@@ -13,7 +13,7 @@ export const DeviceTypesToDataTypes = {
 };
 
 export interface DeviceData {
-  id: number,
+  id: string,
   name: string,
   value: any,
   type: DeviceType,
@@ -27,7 +27,7 @@ export class Device {
   public ip: string | null = null;
   public manual: boolean = false;
   public value: any;
-  public id: number;
+  public id: string;
   public name: string;
   public type: DeviceType;
   /**
@@ -38,7 +38,7 @@ export class Device {
   public operationalRanges: string[];
   private _timer: NodeJS.Timeout;
 
-  constructor(id: number, name: string, type: DeviceType, operationalRanges?: string[]) {
+  constructor(id: string, name: string, type: DeviceType, operationalRanges?: string[]) {
     switch (type) {
       case 'boolean':
         this.value = false;
@@ -95,7 +95,6 @@ export class Device {
       }).catch((reason) => {
         log(EVENT_TYPES.error, [`Device not found 404, ${this.name}, ${reason}`]);
         reject(false);
-        // resolve(false);
       });
     });
   }

@@ -1,27 +1,30 @@
 import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceData } from "../classes/device.class";
-import {
-  setSunriseEvent,
-  setSunsetEvent,
-} from "./dailyEventsHandler";
+import JSONdb from "simple-json-db";
+// import {
+//   setSunriseEvent,
+//   setSunsetEvent,
+// } from "./dailyEventsHandler";
 
 // These get populated as devices join the local network
 export const devices: Device[] = [];
 
+export const DevicesDB = new JSONdb('db/devices.db.json');
+
 /**
  * Initializes the fixed executions of daily devices
  */
-export function initDailyDevices() {
-  let val = 35;
-  let blinds = devices.filter((device) => device.id === 3 || device.id === 4);
-  setSunriseEvent(`Open living room blinds at ${val}%`, () => {
-    blinds.forEach((dev) => dev.autoTrigger(val));
-  });
+// export function initDailyDevices() {
+//   let val = 35;
+//   let blinds = devices.filter((device) => device.id === 3 || device.id === 4);
+//   setSunriseEvent(`Open living room blinds at ${val}%`, () => {
+//     blinds.forEach((dev) => dev.autoTrigger(val));
+//   });
 
-  setSunsetEvent("Close living room blinds", () => {
-    blinds.forEach((dev) => dev.autoTrigger(0));
-  });
-}
+//   setSunsetEvent("Close living room blinds", () => {
+//     blinds.forEach((dev) => dev.autoTrigger(0));
+//   });
+// }
 
 /**
  * takes a request and gets its ip address to store it into a device, this is
@@ -29,7 +32,7 @@ export function initDailyDevices() {
  * @param deviceId Device Id
  * @param address ip address from NodeJS request
  */
-export function assignDeviceIpAddress(deviceId: number, address: string) {
+export function assignDeviceIpAddress(deviceId: string, address: string) {
   let device = devices.find((device) => device.id == deviceId);
   let chunks = address.split(":");
   let ip = chunks[chunks.length - 1];
@@ -46,6 +49,12 @@ export function assignDeviceIpAddress(deviceId: number, address: string) {
 
 export function getDevices(): DeviceData[] {
   return Object.values(devices).map(buildClientDeviceData);
+}
+
+export function mergeDeviceData(device: Device, data: any) {
+  Object.keys(data).forEach((key: string) => {
+    if (device[key]) device[key] = data[key];
+  });
 }
 
 export function buildClientDeviceData(device: Device): DeviceData {

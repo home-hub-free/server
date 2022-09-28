@@ -65,7 +65,7 @@ function scheduleCalendarData(calendarData: ICalendarData) {
   calendarData.events.forEach((event: IEventData) => {
     let reminderTime = addMinutesToTimestamp(event.startTime, -15);
 
-    addDailyEvent('event_reminder-' + event.id, reminderTime, () => {
+    addDailyEvent(calendarData.calendarName + ' event ' + event.name, reminderTime, () => {
       emma.sayCalendarEvent(calendarData.calendarName, event);
     });
   });

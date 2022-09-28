@@ -37,7 +37,11 @@ class Emma {
 
   constructor() { }
 
-  public say(text: string): Promise<boolean> {
+  /**
+   * Handles the creating of the speech and queue (if necessary) for emma's voice
+   * @param text Text that will be read out-loud
+   */
+  say(text: string): Promise<boolean> {
 
     this.latestSpeeches.push(new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + ' ' + text);
     if (this.latestSpeeches.length > 10) {
@@ -57,14 +61,18 @@ class Emma {
     });
   }
 
-  private playQueue(notify?: boolean) {
+  /**
+   * Starts reading speeches in the queue
+   * @param soundNotify Plays a notification-like sound before actually speaking
+   */
+  playQueue(soundNotify?: boolean) {
     let promise = this.speechQueue[0];
     this.pollyOptions.Text = promise.text;
     Polly.synthesizeSpeech(this.pollyOptions, (err, data) => {
       if (err) return promise.reject(err);
 
       fs.writeFileSync(emmaSpeechPath, data.AudioStream);
-      if (notify) {
+      if (soundNotify) {
         player.play(preSpeechSound, () => {
           player.play(emmaSpeechPath, () => {
             this.speechQueue.shift();
@@ -82,7 +90,7 @@ class Emma {
     });
   }
 
-  public sayWeatherForecast(autoTriggered?: boolean) {
+  sayWeatherForecast(autoTriggered?: boolean) {
     let dayTimeWord = getDayTimeWord();
     if (autoTriggered) {
       this.autoForecasted[dayTimeWord] = true;
@@ -94,7 +102,7 @@ class Emma {
     });
   }
 
-  public sayCalendarEvent(calendarName: string, eventData: IEventData) {
+  sayCalendarEvent(calendarName: string, eventData: IEventData) {
     let sentence = this.buildCalendarEventSentence(calendarName, eventData);
     this.say(sentence);
   }
