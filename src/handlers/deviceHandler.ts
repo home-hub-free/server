@@ -5,11 +5,13 @@ import JSONdb from "simple-json-db";
 //   setSunriseEvent,
 //   setSunsetEvent,
 // } from "./dailyEventsHandler";
+export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
-export const devices: Device[] = [];
+export const devices: Device[] = [
+  new Device('12901', 'Fake device', 'value')
+];
 
-export const DevicesDB = new JSONdb('db/devices.db.json');
 
 /**
  * Initializes the fixed executions of daily devices

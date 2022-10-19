@@ -8,6 +8,7 @@ import {
   DevicesDB,
   mergeDeviceData,
 } from "../handlers/deviceHandler";
+import { addSensorEffect } from "../handlers/sensorHandler";
 import { io } from "../handlers/websocketHandler";
 
 export function initDeviceRoutes(app: Express) {
@@ -15,18 +16,26 @@ export function initDeviceRoutes(app: Express) {
     response.send(getDevices());
   });
 
+  app.post("/device-get-actions", (request, response) => {
+    let { id } = request.body;
+    let dbStoredData = DevicesDB.get(id);
+    if (dbStoredData.actions) return response.send(dbStoredData.actions);
+    return response.send([]);
+  });
+
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
     let { id, name } = request.body;
     let device = devices.find((device) => device.id === id);
-    let dbStoredData = DevicesDB.get(id);
 
     if (!device) {
       device = new Device(id, name, DeviceTypesToDataTypes[name]);
-      if (dbStoredData) mergeDeviceData(device, dbStoredData);
-      io.emit("device-declare", buildClientDeviceData(device));
       devices.push(device);
       assignDeviceIpAddress(id, request.ip);
+      if (device.actions.length) {
+        device.actions.forEach(effect => addSensorEffect(effect));
+      }
+      io.emit("device-declare", buildClientDeviceData(device));
     } else {
     }
     response.send(true);

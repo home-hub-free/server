@@ -13,7 +13,7 @@ import {
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 
-import http from 'http';
+import http from "http";
 import { initWebSockets } from "./handlers/websocketHandler";
 import { initEmmaRoutes } from "./routes/emma-routes";
 

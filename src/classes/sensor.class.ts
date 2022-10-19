@@ -1,4 +1,5 @@
 // import { Room } from "./room.class";
+// import { mergeSensorData, SensorsDB } from '../handlers/sensorHandler';
 import { io } from '../handlers/websocketHandler';
 
 export const SensorTypesToDataTypes = {
@@ -7,13 +8,16 @@ export const SensorTypesToDataTypes = {
 }
 
 export class Sensor {
-
   id: string;
   type: 'boolean' | 'value';
   name: string;
   value: any;
   setAs: string[];
   timeout: NodeJS.Timeout;
+  effects = {
+    on: [],
+    off: []
+  };
 
   constructor(
     id: string,
@@ -25,6 +29,8 @@ export class Sensor {
     this.type = type;
     this.name = name;
     this.setAs = setAs || null;
+    // const dbStoredData = SensorsDB.get(this.id);
+    // if (dbStoredData) mergeSensorData(this, dbStoredData);
 
     switch (type) {
       case 'boolean':
@@ -54,9 +60,13 @@ export class Sensor {
     let newValue = value === 1;
     // Cancel current timeout and reset
     if (newValue) {
+      this.value = true;
       if (this.timeout) {
+        // This is a timer reset
         clearTimeout(this.timeout)
       } else {
+        this.effects.on.forEach((fn) => fn());
+        // This is where the motion starts
         io.emit('sensor-update', {
           id: this.id,
           value: true,
@@ -65,11 +75,13 @@ export class Sensor {
       this.timeout = setTimeout(() => {
         this.value = false;
         this.timeout = null;
+        this.effects.off.forEach((fn) => fn());
+
         io.emit('sensor-update', {
           id: this.id,
           value: false,
         });
-      }, 60 * 1000);
+      }, 30 * 1000);
     }
   }
 

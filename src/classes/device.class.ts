@@ -2,6 +2,8 @@ import axios from "axios";
 // import storage from 'node-persist';
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/dailyEventsHandler";
+import { DevicesDB, mergeDeviceData } from "../handlers/deviceHandler";
+import { addSensorEffect } from "../handlers/sensorHandler";
 
 const DEFAULT_TIMER = 1000 * 60;
 
@@ -30,6 +32,7 @@ export class Device {
   public id: string;
   public name: string;
   public type: DeviceType;
+  actions: any[] = []
   /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
    * HH: 0-23
@@ -52,6 +55,8 @@ export class Device {
     this.name = name;
     this.type = type;
     this.operationalRanges = operationalRanges;
+    const dbStoredData = DevicesDB.get(this.id);
+    if (dbStoredData) mergeDeviceData(this, dbStoredData);
   }
 
   /**

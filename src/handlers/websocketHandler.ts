@@ -9,4 +9,12 @@ export function initWebSockets(server: http.Server) {
       methods: ["GET", "POST"],
     },
   });
+
+  io.on('connect', () => {
+    console.log('new connection');
+  });
+
+  io.on('disconnect', () => {
+    console.log('disconnection');
+  })
 }
