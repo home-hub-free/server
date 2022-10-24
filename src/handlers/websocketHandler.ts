@@ -11,10 +11,10 @@ export function initWebSockets(server: http.Server) {
   });
 
   io.on('connect', () => {
-    console.log('new connection');
+    // console.log('new connection');
   });
 
   io.on('disconnect', () => {
-    console.log('disconnection');
+    // console.log('disconnection');
   })
 }

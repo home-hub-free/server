@@ -21,7 +21,6 @@ export const EffectsDB = new JSONdb<IEffect[]>("db/effects.db.json");
 export function initEffectsRoutes(app: Express) {
   app.get("/get-effects", (request, response) => {
     let effects = EffectsDB.get('effects') || [];
-    console.log(effects);
     response.send(effects);
   });
 
@@ -35,7 +34,6 @@ export function initEffectsRoutes(app: Express) {
       let sensorAffected = sensors.find(sensor => sensor.id === effect.when.id);
       sensorAffected.setEffect(effect);
     }
-
 
     response.send(true);
   }); 

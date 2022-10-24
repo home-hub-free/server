@@ -172,8 +172,10 @@ export class Device {
 
   private mergeDBData() {
     const dbStoredData = DevicesDB.get(this.id);
-    Object.keys(dbStoredData).forEach((key: string) => {
-      if (this[key]) this[key] = dbStoredData[key];
-    });
+    if (dbStoredData) {
+      Object.keys(dbStoredData).forEach((key: string) => {
+        if (this[key]) this[key] = dbStoredData[key];
+      });
+    }
   }
 }

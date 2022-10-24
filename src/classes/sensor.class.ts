@@ -117,9 +117,11 @@ export class Sensor {
   
   public setSensorDBEffects() {
     const effects = EffectsDB.get('effects');
-    let sensorEffects = effects.filter((effect) => {
-      return effect.when.type === 'sensor' && effect.when.id === this.id 
-    });
-    sensorEffects.forEach(this.setEffect);
+    if (effects) {
+      let sensorEffects = effects.filter((effect) => {
+        return effect.when.type === 'sensor' && effect.when.id === this.id 
+      });
+      sensorEffects.forEach(this.setEffect);
+    }
   }
 }
