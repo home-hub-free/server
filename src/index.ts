@@ -8,14 +8,16 @@ import {
   getDailyEvents,
   updateDailyGoogleCalendarEvents,
 } from "./handlers/dailyEventsHandler";
-// import { emma } from "./emma/emma-assistent.class";
-// import { readCalendars } from "./handlers/googleCalendarHandler";
+
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 
 import http from "http";
 import { initWebSockets } from "./handlers/websocketHandler";
 import { initEmmaRoutes } from "./routes/emma-routes";
+import { initEffectsRoutes } from "./routes/effects-routes";
+// import { fs } from "fs";
+import fs from 'fs'
 
 /**
  * This project requires to be setup with a designated local ip address so the network of
@@ -41,6 +43,25 @@ initWebSockets(server);
 initSensorRoutes(app);
 initDeviceRoutes(app);
 initEmmaRoutes(app);
+initEffectsRoutes(app);
+
+// Change these to a proper DB eventually
+const DBFiles = [
+  'db/devices.db.json',
+  'db/sensors.db.json',
+  'db/effects.db.json',
+];
+
+DBFiles.forEach((file) => {
+  try {
+    fs.readFileSync(file);
+  } catch(err) {
+    // Doesn't exist
+    if (err.code === 'ENOENT') {
+      fs.writeFileSync(file, JSON.stringify({}));
+    }
+  }
+})
 
 app.get("/get-daily-events", (request, response) => {
   response.send(getDailyEvents());

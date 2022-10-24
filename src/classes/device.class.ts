@@ -1,11 +1,7 @@
 import axios from "axios";
-// import storage from 'node-persist';
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/dailyEventsHandler";
-import { DevicesDB, mergeDeviceData } from "../handlers/deviceHandler";
-import { addSensorEffect } from "../handlers/sensorHandler";
-
-const DEFAULT_TIMER = 1000 * 60;
+import { DevicesDB } from "../handlers/deviceHandler";
 
 type DeviceType = 'boolean' | 'value';
 
@@ -32,7 +28,6 @@ export class Device {
   public id: string;
   public name: string;
   public type: DeviceType;
-  actions: any[] = []
   /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
    * HH: 0-23
@@ -55,8 +50,7 @@ export class Device {
     this.name = name;
     this.type = type;
     this.operationalRanges = operationalRanges;
-    const dbStoredData = DevicesDB.get(this.id);
-    if (dbStoredData) mergeDeviceData(this, dbStoredData);
+    this.mergeDBData();
   }
 
   /**
@@ -119,7 +113,6 @@ export class Device {
     return withinOperationRange || pendingTimer;
   }
 
-
   private validateOperationRanges() {
     let validCount = 0;
     let now = new Date().getTime();
@@ -175,5 +168,12 @@ export class Device {
     now.setSeconds(0);
     
     return now;
+  }
+
+  private mergeDBData() {
+    const dbStoredData = DevicesDB.get(this.id);
+    Object.keys(dbStoredData).forEach((key: string) => {
+      if (this[key]) this[key] = dbStoredData[key];
+    });
   }
 }

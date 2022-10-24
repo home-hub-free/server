@@ -1,5 +1,5 @@
 import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
-import { buildClientSensorData, getSensorsData, mergeSensorData, sensors, SensorsDB } from "../handlers/sensorHandler";
+import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensorHandler";
 import { Express } from "express";
 import { io } from "../handlers/websocketHandler";
 
@@ -13,11 +13,9 @@ export function initSensorRoutes(app: Express) {
   app.post("/sensor-declare", (request, response) => {
     let { id, name } = request.body;
     let sensor = sensors.find((sensor) => sensor.id === id);
-    let dbStoredData = SensorsDB.get(id);
 
     if (!sensor) {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
-      if (dbStoredData) mergeSensorData(sensor, dbStoredData);
       io.emit('sensor-declare', buildClientSensorData(sensor));
       sensors.push(sensor);
     }
@@ -52,7 +50,8 @@ export function initSensorRoutes(app: Express) {
       });
       SensorsDB.set(sensor.id, dbStoredData);
     }
-    mergeSensorData(sensor, incomingData);
+
+    sensor.mergeDBData();
     response.send(true);
   });
 }

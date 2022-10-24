@@ -1,6 +1,7 @@
-// import { Room } from "./room.class";
-// import { mergeSensorData, SensorsDB } from '../handlers/sensorHandler';
+import { devices } from '../handlers/deviceHandler';
+import { SensorsDB } from '../handlers/sensorHandler';
 import { io } from '../handlers/websocketHandler';
+import { EffectsDB } from '../routes/effects-routes';
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
@@ -29,8 +30,8 @@ export class Sensor {
     this.type = type;
     this.name = name;
     this.setAs = setAs || null;
-    // const dbStoredData = SensorsDB.get(this.id);
-    // if (dbStoredData) mergeSensorData(this, dbStoredData);
+    this.mergeDBData();
+    this.setSensorDBEffects();
 
     switch (type) {
       case 'boolean':
@@ -50,6 +51,15 @@ export class Sensor {
         this.updateValueSensor(value);
         break;
     }
+  }
+
+  setEffect(effect: any) {
+    this.effects.on.push(() => {
+      let device = devices.find(device => device.id === effect.set.id);
+      if (device) {
+        device.autoTrigger(effect.set.value);
+      }
+    });
   }
 
   /**
@@ -94,5 +104,22 @@ export class Sensor {
    */
   private updateValueSensor(value: any) {
     this.value = value;
+  }
+
+  mergeDBData() {
+    const dbStoredData = SensorsDB.get(this.id);
+    if (dbStoredData) {
+      Object.keys(dbStoredData).forEach((key: string) => {
+        if (this[key]) this[key] = dbStoredData[key];
+      });
+    }
+  }
+  
+  public setSensorDBEffects() {
+    const effects = EffectsDB.get('effects');
+    let sensorEffects = effects.filter((effect) => {
+      return effect.when.type === 'sensor' && effect.when.id === this.id 
+    });
+    sensorEffects.forEach(this.setEffect);
   }
 }

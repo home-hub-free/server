@@ -8,7 +8,6 @@ import {
   DevicesDB,
   mergeDeviceData,
 } from "../handlers/deviceHandler";
-import { addSensorEffect } from "../handlers/sensorHandler";
 import { io } from "../handlers/websocketHandler";
 
 export function initDeviceRoutes(app: Express) {
@@ -32,9 +31,6 @@ export function initDeviceRoutes(app: Express) {
       device = new Device(id, name, DeviceTypesToDataTypes[name]);
       devices.push(device);
       assignDeviceIpAddress(id, request.ip);
-      if (device.actions.length) {
-        device.actions.forEach(effect => addSensorEffect(effect));
-      }
       io.emit("device-declare", buildClientDeviceData(device));
     } else {
     }

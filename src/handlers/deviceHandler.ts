@@ -9,24 +9,8 @@ export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
 export const devices: Device[] = [
-  new Device('12901', 'Fake device', 'value')
+  // new Device('12901', 'Fake device', 'boolean')
 ];
-
-
-/**
- * Initializes the fixed executions of daily devices
- */
-// export function initDailyDevices() {
-//   let val = 35;
-//   let blinds = devices.filter((device) => device.id === 3 || device.id === 4);
-//   setSunriseEvent(`Open living room blinds at ${val}%`, () => {
-//     blinds.forEach((dev) => dev.autoTrigger(val));
-//   });
-
-//   setSunsetEvent("Close living room blinds", () => {
-//     blinds.forEach((dev) => dev.autoTrigger(0));
-//   });
-// }
 
 /**
  * takes a request and gets its ip address to store it into a device, this is
