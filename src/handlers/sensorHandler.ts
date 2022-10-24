@@ -1,12 +1,9 @@
 import JSONdb from 'simple-json-db';
 import { Sensor } from '../classes/sensor.class';
-
 export const SensorsDB = new JSONdb('db/sensors.db.json');
 
 // These get populated as sensors join the local network
-export const sensors: Sensor[] = [
-  // new Sensor('12301', 'Fake sensor', 'boolean')
-];
+export const sensors: Sensor[] = [];
 
 export function updateSensor(sensorId: string, value: any) {
   let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);

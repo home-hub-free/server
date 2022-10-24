@@ -4,9 +4,7 @@ import JSONdb from "simple-json-db";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
-export const devices: Device[] = [
-  new Device('12901', 'test-device', 'boolean')
-];
+export const devices: Device[] = [];
 
 /**
  * takes a request and gets its ip address to store it into a device, this is
