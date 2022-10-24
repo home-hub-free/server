@@ -117,11 +117,17 @@ export class Sensor {
   
   public setSensorDBEffects() {
     const effects = EffectsDB.get('effects');
-    if (effects) {
+    if (effects && effects.length) {
       let sensorEffects = effects.filter((effect) => {
         return effect.when.type === 'sensor' && effect.when.id === this.id 
       });
-      sensorEffects.forEach(this.setEffect);
+      sensorEffects.forEach((e) => {
+        this.setEffect(e);
+      });
     }
   }
 }
+
+// sensors.push(
+//   new Sensor('12301', 'Fake sensor', 'boolean')
+// )
