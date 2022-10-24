@@ -59,7 +59,7 @@ export function initDeviceRoutes(app: Express) {
   });
 
   // Updates information about a device, this information live in DB
-  app.post("/device-data-set", (request, response) => {
+  app.post("/devices-data-set", (request, response) => {
     let device = devices.find((device) => device.id === request.body.id);
     if (!device) return response.send(false);
     if (!request.body.data) return response.send(false);

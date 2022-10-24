@@ -16,7 +16,6 @@ import http from "http";
 import { initWebSockets } from "./handlers/websocketHandler";
 import { initEmmaRoutes } from "./routes/emma-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
-// import { fs } from "fs";
 import fs from 'fs'
 
 /**

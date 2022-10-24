@@ -1,15 +1,11 @@
 import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceData } from "../classes/device.class";
 import JSONdb from "simple-json-db";
-// import {
-//   setSunriseEvent,
-//   setSunsetEvent,
-// } from "./dailyEventsHandler";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
 export const devices: Device[] = [
-  // new Device('12901', 'Fake device', 'boolean')
+  new Device('12901', 'test-device', 'boolean')
 ];
 
 /**

@@ -35,7 +35,7 @@ export function initSensorRoutes(app: Express) {
   });
 
   // Updates information about sensor that lives in DB
-  app.post('/sensor-data-set', (request, response) => {
+  app.post('/sensors-data-set', (request, response) => {
     let sensor = sensors.find((sensor) => sensor.id === request.body.id);
     if (!sensor) return response.send(false);
     if (!request.body.data) response.send(false);
