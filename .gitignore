@@ -9,4 +9,4 @@ dist
 google-calendars.json
 
 src/sounds/speech/**
-db/**.*
+db/**.**
