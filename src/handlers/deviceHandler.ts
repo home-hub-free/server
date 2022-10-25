@@ -4,7 +4,9 @@ import JSONdb from "simple-json-db";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
-export const devices: Device[] = [];
+export const devices: Device[] = [
+  // new Device('23239', 'test-device', 'value')
+];
 
 /**
  * takes a request and gets its ip address to store it into a device, this is
@@ -33,7 +35,7 @@ export function getDevices(): DeviceData[] {
 
 export function mergeDeviceData(device: Device, data: any) {
   Object.keys(data).forEach((key: string) => {
-    if (device[key]) device[key] = data[key];
+    if (key in device) device[key] = data[key];
   });
 }
 

@@ -92,7 +92,7 @@ export class Sensor {
           id: this.id,
           value: false,
         });
-      }, 30 * 1000);
+      }, 60 * 1000);
     }
   }
 

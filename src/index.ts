@@ -4,9 +4,8 @@ dotenv.config();
 import express, { Express } from "express";
 import cors from "cors";
 import {
-  updateAstroEvents,
   getDailyEvents,
-  updateDailyGoogleCalendarEvents,
+  initDailyEvents,
 } from "./handlers/dailyEventsHandler";
 
 import { initSensorRoutes } from "./routes/sensor-routes";
@@ -22,12 +21,8 @@ import fs from 'fs'
  * This project requires to be setup with a designated local ip address so the network of
  * devices can communicate directly to it
  */
-
 const app: Express = express();
 const PORT = 8080;
-
-updateAstroEvents();
-updateDailyGoogleCalendarEvents();
 
 app.use(express.json());
 app.use(cors());
@@ -43,6 +38,7 @@ initSensorRoutes(app);
 initDeviceRoutes(app);
 initEmmaRoutes(app);
 initEffectsRoutes(app);
+initDailyEvents();
 
 // Change these to a proper DB eventually
 const DBFiles = [
@@ -50,7 +46,6 @@ const DBFiles = [
   'db/sensors.db.json',
   'db/effects.db.json',
 ];
-
 DBFiles.forEach((file) => {
   try {
     fs.readFileSync(file);

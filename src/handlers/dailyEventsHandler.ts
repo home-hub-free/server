@@ -22,9 +22,13 @@ rule.second = 0;
 rule.dayOfWeek = new schedule.Range(0,6);
 schedule.scheduleJob(rule, () => {
   cleanup();
+  initDailyEvents();
+});
+
+export function initDailyEvents() {
   updateAstroEvents();
   updateDailyGoogleCalendarEvents();
-});
+}
 
 export function addDailyEvent(name, time, execution) {
   if (!dailyEvents[name]) {
@@ -53,7 +57,7 @@ export function setSunsetEvent(desc, fn) {
   };
 }
 
-export function updateDailyGoogleCalendarEvents() {
+function updateDailyGoogleCalendarEvents() {
   readCalendars().then((calendarsData: ICalendarData[]) => {
     calendarsData.forEach((data: ICalendarData) => {
       scheduleCalendarData(data);
@@ -71,7 +75,7 @@ function scheduleCalendarData(calendarData: ICalendarData) {
   });
 }
 
-export function updateAstroEvents() {
+function updateAstroEvents() {
   updateWeatherData()
     .then((result) => {
       let sunrise = result.astro.sunrise;
