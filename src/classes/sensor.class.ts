@@ -72,10 +72,10 @@ export class Sensor {
     // Cancel current timeout and reset
     if (newValue) {
       this.value = true;
+      this.effects.on.forEach((fn) => fn());
       if (this.timeout) {
         // This is a timer reset
         clearTimeout(this.timeout)
-        this.effects.on.forEach((fn) => fn());
       } else {
         // This is where the motion starts
         io.emit('sensor-update', {
