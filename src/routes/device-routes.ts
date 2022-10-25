@@ -48,10 +48,6 @@ export function initDeviceRoutes(app: Express) {
       .manualTrigger(request.body.value)
       .then(() => {
         response.send(buildClientDeviceData(device));
-        io.emit("device-update", {
-          id: device.id,
-          value: request.body.value,
-        });
       })
       .catch(() => {
         response.send(false);

@@ -1,7 +1,8 @@
 import axios from "axios";
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/dailyEventsHandler";
-import { DevicesDB } from "../handlers/deviceHandler";
+import { buildClientDeviceData, DevicesDB } from "../handlers/deviceHandler";
+import { io } from "../handlers/websocketHandler";
 
 type DeviceType = 'boolean' | 'value';
 
@@ -89,6 +90,7 @@ export class Device {
       }
       axios.get(`http://${this.ip}/set?value=${value}`).then(() => {
         this.value = value;
+        io.emit("device-update", buildClientDeviceData(this));
         log(EVENT_TYPES.device_triggered, [`Device triggered ${this.name}, ${this.value}`]);
         resolve(true);
       }).catch((reason) => {
