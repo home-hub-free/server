@@ -54,9 +54,10 @@ export class Sensor {
   }
 
   setEffect(effect: any) {
-    this.effects.on.push(() => {
+    let prop = !effect.when.is || effect.when.is === 'false' ? 'off' : 'on';
+    this.effects[prop].push(() => {
       let device = devices.find(device => device.id === effect.set.id);
-      if (device) {
+      if (device && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
       }
     });
@@ -74,8 +75,8 @@ export class Sensor {
       if (this.timeout) {
         // This is a timer reset
         clearTimeout(this.timeout)
-      } else {
         this.effects.on.forEach((fn) => fn());
+      } else {
         // This is where the motion starts
         io.emit('sensor-update', {
           id: this.id,

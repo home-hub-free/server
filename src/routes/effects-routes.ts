@@ -30,9 +30,13 @@ export function initEffectsRoutes(app: Express) {
     effects.push(effect);
     EffectsDB.set('effects', effects);
 
-    if (effect.when.type === 'sensor') {
-      let sensorAffected = sensors.find(sensor => sensor.id === effect.when.id);
-      sensorAffected.setEffect(effect);
+    switch (effect.when.type) {
+      case 'sensor':
+        let sensorAffected = sensors.find(sensor => sensor.id === effect.when.id);
+        sensorAffected.setEffect(effect);
+        break;
+      case 'time':
+        break;
     }
 
     response.send(true);

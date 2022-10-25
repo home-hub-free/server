@@ -47,7 +47,7 @@ export function initDeviceRoutes(app: Express) {
     device
       .manualTrigger(request.body.value)
       .then(() => {
-        response.send(true);
+        response.send(buildClientDeviceData(device));
         io.emit("device-update", {
           id: device.id,
           value: request.body.value,

@@ -71,7 +71,7 @@ export class Device {
    */
   manualTrigger(value: any): Promise<boolean> {
     return this.notifyDevice(value).then((success) => {
-      if (this.type !== 'value') this.manual = true;
+      this.manual = true;
       if (this._timer) {
         clearTimeout(this._timer)
         this._timer = null;
