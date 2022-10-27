@@ -27,6 +27,8 @@ export function initEffectsRoutes(app: Express) {
   app.post("/set-effect", (request, response) => {
     let { effect } = request.body;
     let effects: IEffect[] = EffectsDB.get('effects') || [];
+    effect.set.value = JSON.parse(effect.set.value);
+    effect.when.is = JSON.parse(effect.when.is);
     effects.push(effect);
     EffectsDB.set('effects', effects);
 
