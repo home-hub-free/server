@@ -26,8 +26,9 @@ schedule.scheduleJob(rule, () => {
 });
 
 export function initDailyEvents() {
-  updateAstroEvents();
-  updateDailyGoogleCalendarEvents();
+  updateAstroEvents().then(() => {
+    updateDailyGoogleCalendarEvents();
+  });
 }
 
 export function addDailyEvent(name, time, execution) {
@@ -58,7 +59,7 @@ export function setSunsetEvent(desc, fn) {
 }
 
 function updateDailyGoogleCalendarEvents() {
-  readCalendars().then((calendarsData: ICalendarData[]) => {
+  return readCalendars().then((calendarsData: ICalendarData[]) => {
     calendarsData.forEach((data: ICalendarData) => {
       scheduleCalendarData(data);
     });
@@ -76,7 +77,7 @@ function scheduleCalendarData(calendarData: ICalendarData) {
 }
 
 function updateAstroEvents() {
-  updateWeatherData()
+  return updateWeatherData()
     .then((result) => {
       let sunrise = result.astro.sunrise;
       let sunset = result.astro.sunset;
