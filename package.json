@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "npx tsc && node dist/index.js",
-    "test": "npx jest"
+    "start": "npm run build && node dist/index.js",
+    "test": "npx jest",
+    "build": "NODE_OPTIONS='--max-old-space-size=3000' npx tsc"
   },
   "author": "Damuz",
   "license": "ISC",
