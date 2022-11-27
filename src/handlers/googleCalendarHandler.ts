@@ -1,22 +1,22 @@
-import { google } from 'googleapis';
+import { calendar_v3 } from 'googleapis';
+import { AuthPlus } from 'googleapis/build/src/googleapis';
 
 const calendars = require('../../google-calendars.json');
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
 
-
-const jwtClient = new google.auth.JWT(
+const auth = new AuthPlus()
+const jwtClient = new auth.JWT(
   GOOGLE_CLIENT_EMAIL,
   null,
   GOOGLE_PRIVATE_KEY,
   SCOPES
 );
 
-const calendar = google.calendar({
-  version: 'v3',
+const calendar = new calendar_v3.Calendar({
   auth: jwtClient
-});
+})
 
 export interface IEventData {
   type: string,
