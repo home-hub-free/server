@@ -12,7 +12,7 @@ export function initSensorRoutes(app: Express) {
   // to the server (Also used as a ping function each 10 seconds)
   app.post("/sensor-declare", (request, response) => {
     let { id, name } = request.body;
-    let sensor = sensors.find((sensor) => sensor.id === id);
+    let sensor = sensors.find((sensor) => String(sensor.id) === String(id));
 
     if (!sensor) {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
@@ -25,7 +25,7 @@ export function initSensorRoutes(app: Express) {
   // Called whenever a sensor's data is updated and its notified to the server
   app.post("/sensor-update", (request, response) => {
     let { id } = request.body;
-    let sensor = sensors.find((sensor) => sensor.id === id);
+    let sensor = sensors.find((sensor) => String(sensor.id) === String(id));
     if (sensor && request.body.value !== undefined) {
       sensor.update(request.body.value);
       response.send(true);
