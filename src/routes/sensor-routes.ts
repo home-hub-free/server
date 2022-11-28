@@ -26,7 +26,7 @@ export function initSensorRoutes(app: Express) {
   app.post("/sensor-update", (request, response) => {
     let { id } = request.body;
     let sensor = sensors.find((sensor) => sensor.id === id);
-    if (sensor && request.body.value) {
+    if (sensor && request.body.value !== undefined) {
       sensor.update(request.body.value);
       response.send(true);
     } else {
