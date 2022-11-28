@@ -79,7 +79,7 @@ export class Sensor {
     }
     io.emit('sensor-update', {
       id: this.id,
-      value: value,
+      value: this.value,
     });
     this.timeout = setTimeout(() => {
       this.value = false;
