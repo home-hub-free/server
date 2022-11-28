@@ -68,32 +68,29 @@ export class Sensor {
    * so we keep an activity timmer for 1 minute
    */
   private updateBooleanSensor(value: any) {
-    let newValue = value === 1;
-    // Cancel current timeout and reset
-    if (newValue) {
-      this.value = true;
-      this.effects.on.forEach((fn) => fn());
-      if (this.timeout) {
-        // This is a timer reset
-        clearTimeout(this.timeout)
-      } else {
-        // This is where the motion starts
-        io.emit('sensor-update', {
-          id: this.id,
-          value: true,
-        });
-      }
-      this.timeout = setTimeout(() => {
-        this.value = false;
-        this.timeout = null;
-        this.effects.off.forEach((fn) => fn());
-
-        io.emit('sensor-update', {
-          id: this.id,
-          value: false,
-        });
-      }, 60 * 1000);
+    // let newValue = value === 1;
+    this.value = value === 1;
+    this.effects.on.forEach((fn) => fn());
+    if (this.timeout) {
+      // This is a timer reset
+      clearTimeout(this.timeout)
+    } else {
+      // This is where the motion starts
     }
+    io.emit('sensor-update', {
+      id: this.id,
+      value: value,
+    });
+    this.timeout = setTimeout(() => {
+      this.value = false;
+      this.timeout = null;
+      this.effects.off.forEach((fn) => fn());
+
+      io.emit('sensor-update', {
+        id: this.id,
+        value: false,
+      });
+    }, 60 * 1000);
   }
 
   /**
