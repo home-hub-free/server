@@ -10,7 +10,7 @@ export const Greets = {
     "Good morning, a lot of code to be written, designs to be thought of."
   ],
   afternoon: [
-    "Good afterenoon."
+    "Good afternoon."
   ],
   evening: [
     "Good evening."
@@ -26,8 +26,8 @@ export const SentenceConnectors = [
 ]
 
 export const SentenceEnders = [
-  'That is all data I have for now, have a nice day',
-  'That is all from me, have a nice day',
+  'That\'s all data I have for now, have a nice day',
+  'That\'s all from me, have a nice day',
   'And that\'s all i have for now, have a nice day'
 ]
 

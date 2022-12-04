@@ -26,9 +26,13 @@ export function initEmmaRoutes(app: Express) {
   app.get("/emma-calendar", (request, response) => {
     readCalendars().then((calendars) => {
       calendars.forEach((calendar) => {
-        calendar.events.forEach((event) => {
-          emma.sayCalendarEvent(calendar.calendarName, event);
-        });
+        if (!calendar.events.length) {
+          emma.say(`There's nothing for today in ${calendar.calendarName}'s calendar`);
+        } else {
+          calendar.events.forEach((event) => {
+            emma.sayCalendarEvent(calendar.calendarName, event);
+          });
+        }
       });
       response.send(calendars);
     });
