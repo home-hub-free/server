@@ -29,10 +29,10 @@ class Emma {
   private speechQueue: ISpeechPromise[] = [];
   private pollyOptions = {
     Engine: 'neural',
-    LanguageCode: 'en-NZ',
+    LanguageCode: 'en-GB',
     OutputFormat: 'mp3',
     Text: '',
-    VoiceId: 'Aria'
+    VoiceId: 'Emma'
   };
 
   constructor() { }
