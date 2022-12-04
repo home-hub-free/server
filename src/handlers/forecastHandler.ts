@@ -63,7 +63,6 @@ export function updateWeatherData(): Promise<any> {
   return new Promise((resolve, reject) => {
     axios.get(url)
       .then((result) => {
-
         updateForecastData(result);
         updateAstroData(result);
 
@@ -97,7 +96,7 @@ function updateForecastData(result) {
   
   // Update all important values
   forecast.minTemp = forecastDay.day.mintemp_c;
-  forecast.currentTemp = result.data.current.temp_c;
+  forecast.currentTemp = currentHourForecast.temp_c;
   forecast.dayAvgTemp = forecastDay.day.avgtemp_c;
   forecast.humidityAvg = forecastDay.day.avghumidity;
   forecast.description = WeatherDescriptions.find((item) => item.code === forecastDay.day.condition.code).sentence;
