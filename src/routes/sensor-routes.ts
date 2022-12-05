@@ -1,7 +1,7 @@
 import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
-import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensorHandler";
+import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensodr.handler";
 import { Express } from "express";
-import { io } from "../handlers/websocketHandler";
+import { io } from "../handlers/websockets.handler";
 
 export function initSensorRoutes(app: Express) {
   app.get("/get-sensors", (request, response) => {

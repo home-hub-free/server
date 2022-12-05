@@ -1,6 +1,6 @@
-import { devices } from '../handlers/deviceHandler';
-import { SensorsDB } from '../handlers/sensorHandler';
-import { io } from '../handlers/websocketHandler';
+import { devices } from '../handlers/device.handler';
+import { SensorsDB } from '../handlers/sensodr.handler';
+import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 
 export const SensorTypesToDataTypes = {

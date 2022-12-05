@@ -35,4 +35,5 @@ export const Reminders = [
   'Hey there, friendly reminder',
   'Hello, just a heads up',
   'Hey,  don\'t forget',
+  'Remember',
 ]

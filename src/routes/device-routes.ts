@@ -7,8 +7,8 @@ import {
   buildClientDeviceData,
   DevicesDB,
   mergeDeviceData,
-} from "../handlers/deviceHandler";
-import { io } from "../handlers/websocketHandler";
+} from "../handlers/device.handler";
+import { io } from "../handlers/websockets.handler";
 
 export function initDeviceRoutes(app: Express) {
   app.get("/get-devices", (request, response) => {

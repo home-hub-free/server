@@ -1,7 +1,9 @@
 import { calendar_v3 } from 'googleapis';
 import { AuthPlus } from 'googleapis/build/src/googleapis';
+import fs from 'fs';
+import path from 'path';
 
-const calendars = require('../../google-calendars.json');
+// const calendars = require('../../google-calendars.json');
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
@@ -33,9 +35,24 @@ export interface ICalendarData {
 }
 
 export function readCalendars(): Promise<ICalendarData[]> {
+  let content = fs.readFileSync('google-calendars.json', "utf8");
+  if (!content || !content.trim()) {
+    console.log('No calendar data found in "google-calendars.json"')
+    return Promise.resolve([]);
+  };
+
+  let calendars = {};
+  try {
+    calendars = JSON.parse(content)
+  } catch (e) {
+    console.log('Invalid content in "google-calendars.json"');
+    return Promise.resolve([]);
+  }
   let calendarNames = Object.keys(calendars);
   let resolved = 0;
   let result: ICalendarData[] = [];
+
+  if (!calendarNames || !calendarNames.length) return Promise.resolve([])
 
   return new Promise((resolve, reject) => {
     calendarNames.forEach((name, i) => {
@@ -87,7 +104,6 @@ function getCalendarEvents(id: string) {
     }, (error, result) => {
       if (error) {
         reject(error);
-        console.log(error);
       } else {
         if (result.data.items.length) {
           resolve(result.data.items);

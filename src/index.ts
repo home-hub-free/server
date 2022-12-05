@@ -6,14 +6,14 @@ import cors from "cors";
 import {
   getDailyEvents,
   initDailyEvents,
-} from "./handlers/dailyEventsHandler";
+} from "./handlers/daily-events.handler";
 
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 
 import http from "http";
-import { initWebSockets } from "./handlers/websocketHandler";
-import { initEmmaRoutes } from "./routes/emma-routes";
+import { initWebSockets } from "./handlers/websockets.handler";
+import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
 import fs from 'fs'
 
@@ -34,19 +34,25 @@ server.listen(PORT, () => {
 });
 
 initWebSockets(server);
+
 initSensorRoutes(app);
 initDeviceRoutes(app);
-initEmmaRoutes(app);
 initEffectsRoutes(app);
-initDailyEvents();
+initVAssistantRoutes(app);
 
+
+/**
+ * This is a list of required files for the server to be able to do specific things
+ */
 // Change these to a proper DB eventually
 const DBFiles = [
   'db/devices.db.json',
   'db/sensors.db.json',
   'db/effects.db.json',
 ];
-DBFiles.forEach((file) => {
+const CalendarFile = ['google-calendars.json'];
+
+[...DBFiles, ...CalendarFile].forEach((file) => {
   try {
     fs.readFileSync(file);
   } catch(err) {
@@ -55,7 +61,10 @@ DBFiles.forEach((file) => {
       fs.writeFileSync(file, JSON.stringify({}));
     }
   }
-})
+});
+
+// These are optional
+initDailyEvents();
 
 app.get("/get-daily-events", (request, response) => {
   response.send(getDailyEvents());

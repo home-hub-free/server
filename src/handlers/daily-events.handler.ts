@@ -2,9 +2,9 @@
 import moment from 'moment';
 import schedule from 'node-schedule';
 import { log, EVENT_TYPES } from '../logger';
-import { updateWeatherData } from './forecastHandler';
-import { readCalendars, ICalendarData, IEventData } from './googleCalendarHandler';
-import { emma } from '../emma/emma-assistent.class';
+import { updateWeatherData } from './forecast.handler';
+import { readCalendars, ICalendarData, IEventData } from './google-calendar.handler';
+import { assistant } from '../v-assistant/v-assistant.class';
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -15,19 +15,23 @@ export let dailyEvents: any = {
 const atSunrise = [];
 const atSunset = [];
 
-var rule = new schedule.RecurrenceRule();
-rule.hour = 0;
-rule.minute = 5;
-rule.second = 0;
-rule.dayOfWeek = new schedule.Range(0,6);
-schedule.scheduleJob(rule, () => {
-  cleanup();
-  initDailyEvents();
-});
-
 export function initDailyEvents() {
+  var rule = new schedule.RecurrenceRule();
+  rule.hour = 0;
+  rule.minute = 5;
+  rule.second = 0;
+  rule.dayOfWeek = new schedule.Range(0,6);
+
   updateAstroEvents().then(() => {
     updateDailyGoogleCalendarEvents();
+  });
+
+  // This runs daily at 12:05am, updates weather data and retrieves calendar data (if any)
+  schedule.scheduleJob(rule, () => {
+    cleanup();
+    updateAstroEvents().then(() => {
+      updateDailyGoogleCalendarEvents();
+    });
   });
 }
 
@@ -71,7 +75,7 @@ function scheduleCalendarData(calendarData: ICalendarData) {
     let reminderTime = addMinutesToTimestamp(event.startTime, -15);
 
     addDailyEvent(calendarData.calendarName + ' event ' + event.name, reminderTime, () => {
-      emma.sayCalendarEvent(calendarData.calendarName, event);
+      assistant.sayCalendarEvent(calendarData.calendarName, event);
     });
   });
 }
@@ -130,9 +134,9 @@ function cleanup() {
     sunset: {}
   };
 
-  emma.autoForecasted.morning = false;
-  emma.autoForecasted.afternoon = false;
-  emma.autoForecasted.evening = false;
+  assistant.autoForecasted.morning = false;
+  assistant.autoForecasted.afternoon = false;
+  assistant.autoForecasted.evening = false;
 }
 
 export function getSunsetTimeStamp() {

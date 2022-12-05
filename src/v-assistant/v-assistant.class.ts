@@ -1,7 +1,7 @@
-import { getDayTimeWord, IForecastData, updateWeatherData } from '../handlers/forecastHandler';
+import { getDayTimeWord, IForecastData, updateWeatherData } from '../handlers/forecast.handler';
 import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets';
 import fs from 'fs';
-import { IEventData } from '../handlers/googleCalendarHandler';
+import { IEventData } from '../handlers/google-calendar.handler';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
@@ -16,7 +16,7 @@ interface ISpeechPromise {
   reject: (reason?: any) => void
 }
 
-class Emma {  
+class VAssistant {  
 
   public autoForecasted = {
     morning: false,
@@ -153,7 +153,7 @@ class Emma {
   }
 }
 
-export const emma = new Emma();
+export const assistant = new VAssistant();
 
 if (process.env.USER === 'pi') {
   setInterval(() => {

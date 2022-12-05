@@ -1,8 +1,8 @@
 import axios from "axios";
 import { EVENT_TYPES, log } from "../logger";
-import { dailyEvents } from "../handlers/dailyEventsHandler";
-import { buildClientDeviceData, DevicesDB } from "../handlers/deviceHandler";
-import { io } from "../handlers/websocketHandler";
+import { dailyEvents } from "../handlers/daily-events.handler";
+import { buildClientDeviceData, DevicesDB } from "../handlers/device.handler";
+import { io } from "../handlers/websockets.handler";
 
 type DeviceType = 'boolean' | 'value';
 
