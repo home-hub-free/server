@@ -69,10 +69,11 @@ export class Sensor {
    */
   private updateBooleanSensor(value: any) {
     // let newValue = value === 1;
-    this.value = value === 1;
+    let state = value === 1;
     this.effects.on.forEach((fn) => fn());
     if (this.timeout) clearTimeout(this.timeout)
-    if (this.value) {
+    if (state) {
+      this.value = true;
       io.emit('sensor-update', {
         id: this.id,
         value: true,
