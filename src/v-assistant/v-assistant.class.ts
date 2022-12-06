@@ -25,6 +25,7 @@ class VAssistant {
   };
 
   public latestSpeeches = [];
+  public lastAutoForecast: number = 0;
 
   private speechQueue: ISpeechPromise[] = [];
   private pollyOptions = {

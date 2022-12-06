@@ -137,14 +137,16 @@ export class Sensor {
       this.consecutiveActivationsTimer = null;
     }, 15 * 1000);
 
-    let hour = new Date().getHours();
-    if (this.consecutiveActivations >= 5 && hour >= 6) {
+    let now = new Date();
+    let hour = now.getHours();
+    if (this.consecutiveActivations >= 5 && hour >= 6 && now.getTime() - assistant.lastAutoForecast > 3 * 60 * 1000) {
       let timeOfDay = hour >= 6 && hour < 12 ?
         'morning' : hour >= 12 && hour < 18 ?
         'afternoon' : 'evening';
       if (!assistant.autoForecasted[timeOfDay]) {
         assistant.sayWeatherForecast();
         assistant.autoForecasted[timeOfDay] = true;
+        assistant.lastAutoForecast = now.getTime();
       }
       this.consecutiveActivations = 0;
     }
