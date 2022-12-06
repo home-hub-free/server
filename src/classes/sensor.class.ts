@@ -135,7 +135,7 @@ export class Sensor {
     this.consecutiveActivationsTimer = setTimeout(() => {
       this.consecutiveActivations = 0;
       this.consecutiveActivationsTimer = null;
-    }, 5 * 1000);
+    }, 15 * 1000);
 
     let hour = new Date().getHours();
     if (this.consecutiveActivations >= 5 && hour >= 6) {
