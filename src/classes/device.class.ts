@@ -9,6 +9,7 @@ type DeviceType = 'boolean' | 'value';
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
   'dimmable-light': 'value',
+  'blinds': 'value'
 };
 
 export interface DeviceData {

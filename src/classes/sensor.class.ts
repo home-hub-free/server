@@ -2,6 +2,7 @@ import { devices } from '../handlers/device.handler';
 import { SensorsDB } from '../handlers/sensodr.handler';
 import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
+import { assistant } from '../v-assistant/v-assistant.class';
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
@@ -13,23 +14,22 @@ export class Sensor {
   type: 'boolean' | 'value';
   name: string;
   value: any;
-  setAs: string[];
   timeout: NodeJS.Timeout;
   effects = {
     on: [],
     off: []
   };
+  consecutiveActivations = 0;
+  consecutiveActivationsTimer = null;
 
   constructor(
     id: string,
     name?: string,
     type?: 'boolean' | 'value',
-    setAs?: string[]
     ) {
     this.id = id;
     this.type = type;
     this.name = name;
-    this.setAs = setAs || null;
     this.mergeDBData();
     this.setSensorDBEffects();
 
@@ -45,7 +45,7 @@ export class Sensor {
   update(value) {
     switch (this.type) {
       case 'boolean':
-        this.updateBooleanSensor(value);
+        this.updateMotionSensor(value);
         break;
       case 'value':
         this.updateValueSensor(value);
@@ -63,16 +63,37 @@ export class Sensor {
     });
   }
 
+  mergeDBData() {
+    const dbStoredData = SensorsDB.get(this.id);
+    if (dbStoredData) {
+      Object.keys(dbStoredData).forEach((key: string) => {
+        if (this[key]) this[key] = dbStoredData[key];
+      });
+    }
+  }
+
+  setSensorDBEffects() {
+    const effects = EffectsDB.get('effects');
+    if (effects && effects.length) {
+      let sensorEffects = effects.filter((effect) => {
+        return effect.when.type === 'sensor' && effect.when.id === this.id 
+      });
+      sensorEffects.forEach((e) => {
+        this.setEffect(e);
+      });
+    }
+  }
+
   /**
    * Boolean sensors are basically motion sensors (for now)
    * so we keep an activity timmer for 1 minute
    */
-  private updateBooleanSensor(value: any) {
-    // let newValue = value === 1;
+  private updateMotionSensor(value: any) {
     let state = value === 1;
     this.effects.on.forEach((fn) => fn());
     if (this.timeout) clearTimeout(this.timeout)
     if (state) {
+      this.handleConsecutiveActivations();
       this.value = true;
       io.emit('sensor-update', {
         id: this.id,
@@ -102,24 +123,30 @@ export class Sensor {
     this.value = value;
   }
 
-  mergeDBData() {
-    const dbStoredData = SensorsDB.get(this.id);
-    if (dbStoredData) {
-      Object.keys(dbStoredData).forEach((key: string) => {
-        if (this[key]) this[key] = dbStoredData[key];
-      });
-    }
-  }
-  
-  public setSensorDBEffects() {
-    const effects = EffectsDB.get('effects');
-    if (effects && effects.length) {
-      let sensorEffects = effects.filter((effect) => {
-        return effect.when.type === 'sensor' && effect.when.id === this.id 
-      });
-      sensorEffects.forEach((e) => {
-        this.setEffect(e);
-      });
+  /**
+   * Motion sensors will trigger voiced forecast if
+   * any motion sensor activates 5 consecutive times
+   * and its a reasonable time of day
+   */
+  private handleConsecutiveActivations() {
+    this.consecutiveActivations++;
+    if (this.consecutiveActivationsTimer) clearTimeout(this.consecutiveActivationsTimer);
+
+    this.consecutiveActivationsTimer = setTimeout(() => {
+      this.consecutiveActivations = 0;
+      this.consecutiveActivationsTimer = null;
+    }, 5 * 1000);
+
+    let hour = new Date().getHours();
+    if (this.consecutiveActivations >= 5 && hour >= 6) {
+      let timeOfDay = hour >= 6 && hour < 12 ?
+        'morning' : hour >= 12 && hour < 18 ?
+        'afternoon' : 'evening';
+      if (!assistant.autoForecasted[timeOfDay]) {
+        assistant.sayWeatherForecast();
+        assistant.autoForecasted[timeOfDay] = true;
+      }
+      this.consecutiveActivations = 0;
     }
   }
 }

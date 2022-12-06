@@ -61,11 +61,28 @@ class VAssistant {
     });
   }
 
+  sayWeatherForecast(autoTriggered?: boolean) {
+    let dayTimeWord = getDayTimeWord();
+    if (autoTriggered) {
+      this.autoForecasted[dayTimeWord] = true;
+    }
+    return updateWeatherData().then((data) => {
+      let sentence = this.buildForecastSentence(data.forecast);
+      this.say(sentence);
+      return sentence;
+    });
+  }
+
+  sayCalendarEvent(calendarName: string, eventData: IEventData) {
+    let sentence = this.buildCalendarEventSentence(calendarName, eventData);
+    this.say(sentence);
+  }
+
   /**
    * Starts reading speeches in the queue
    * @param soundNotify Plays a notification-like sound before actually speaking
    */
-  playQueue(soundNotify?: boolean) {
+  private playQueue(soundNotify?: boolean) {
     let promise = this.speechQueue[0];
     this.pollyOptions.Text = promise.text;
     Polly.synthesizeSpeech(this.pollyOptions, (err, data) => {
@@ -88,23 +105,6 @@ class VAssistant {
         });
       }
     });
-  }
-
-  sayWeatherForecast(autoTriggered?: boolean) {
-    let dayTimeWord = getDayTimeWord();
-    if (autoTriggered) {
-      this.autoForecasted[dayTimeWord] = true;
-    }
-    return updateWeatherData().then((data) => {
-      let sentence = this.buildForecastSentence(data.forecast);
-      this.say(sentence);
-      return sentence;
-    });
-  }
-
-  sayCalendarEvent(calendarName: string, eventData: IEventData) {
-    let sentence = this.buildCalendarEventSentence(calendarName, eventData);
-    this.say(sentence);
   }
 
   private buildForecastSentence(data: IForecastData): string {
