@@ -26,7 +26,7 @@ export const WeatherDescriptions =
       "day": "Overcast",
       "night": "Overcast",
       "icon": 122,
-      "sentence": "Today's sky will be overcasted, almost entirely covered by clouds"
+      "sentence": "Today's sky will be overcasted"
     },
     {
       "code": 1030,
