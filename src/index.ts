@@ -52,6 +52,14 @@ const DBFiles = [
 ];
 const CalendarFile = ['google-calendars.json'];
 
+try {
+  fs.readdirSync('db');
+} catch (err) {
+  if (err.code === 'ENOENT') {
+    fs.mkdirSync('db');
+  }
+}
+
 [...DBFiles, ...CalendarFile].forEach((file) => {
   try {
     fs.readFileSync(file);
