@@ -33,6 +33,7 @@ export function initDeviceRoutes(app: Express) {
       assignDeviceIpAddress(id, request.ip);
       io.emit("device-declare", buildClientDeviceData(device));
     } else {
+      device.lastPing = new Date();
     }
     response.send(true);
   });

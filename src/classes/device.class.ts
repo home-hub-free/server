@@ -30,6 +30,7 @@ export class Device {
   public id: string;
   public name: string;
   public type: DeviceType;
+  public lastPing: Date = new Date();
   /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
    * HH: 0-23

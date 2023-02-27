@@ -21,6 +21,7 @@ export class Sensor {
   };
   consecutiveActivations = 0;
   consecutiveActivationsTimer = null;
+  lastPing: Date = new Date();
 
   constructor(
     id: string,

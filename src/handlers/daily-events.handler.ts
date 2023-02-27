@@ -5,6 +5,8 @@ import { log, EVENT_TYPES } from '../logger';
 import { updateWeatherData } from './forecast.handler';
 import { readCalendars, ICalendarData, IEventData } from './google-calendar.handler';
 import { assistant } from '../v-assistant/v-assistant.class';
+import { sensors } from './sensodr.handler';
+import { devices } from './device.handler';
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -14,6 +16,20 @@ export let dailyEvents: any = {
 // Array of funcitons that will be triggeres at sunrise/sunset
 const atSunrise = [];
 const atSunset = [];
+
+setTimeout(() => {
+  let now = new Date();
+  for (let i = devices.length - 1; i >= 0; i--) {
+    const device = devices[i];
+    const offlineTime = now.getTime() - device.lastPing.getTime();
+    if (offlineTime > 60 * 1000) devices.splice(i, 1)
+  }
+  for (let i = sensors.length - 1; i >= 0; i--) {
+    const sensor = sensors[i];
+    const offlineTime = now.getTime() - sensor.lastPing.getTime();
+    if (offlineTime > 60 * 1000) sensors.splice(i, 1)
+  }
+}, 60 * 1000);
 
 export function initDailyEvents() {
   var rule = new schedule.RecurrenceRule();

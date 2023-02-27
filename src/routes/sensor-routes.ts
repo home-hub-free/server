@@ -18,6 +18,8 @@ export function initSensorRoutes(app: Express) {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
       io.emit('sensor-declare', buildClientSensorData(sensor));
       sensors.push(sensor);
+    } else {
+      sensor.lastPing = new Date();
     }
     response.send(true);
   });
