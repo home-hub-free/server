@@ -183,3 +183,29 @@ export class Device {
     }
   }
 }
+
+export class DeviceBlinds extends Device {
+  setHomeValue() {
+    return new Promise((resolve, reject) => {
+      if (!this.ip) {
+        log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
+      }
+      axios.get(`http://${this.ip}/home-position`).then(() => {
+        log(EVENT_TYPES.device_triggered, [`Blinds Homed, ${this.name}, ${this.value}`]);
+        resolve(true);
+      });
+    });
+  }
+
+  setMaxValue() {
+    return new Promise((resolve, reject) => {
+      if (!this.ip) {
+        log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
+      }
+      axios.get(`http://${this.ip}/set-limit`).then(() => {
+        log(EVENT_TYPES.device_triggered, [`Blinds Homed, ${this.name}, ${this.value}`]);
+        resolve(true);
+      });
+    });
+  }
+}

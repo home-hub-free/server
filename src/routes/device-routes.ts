@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { Device, DeviceTypesToDataTypes } from "../classes/device.class";
+import { Device, DeviceBlinds, DeviceTypesToDataTypes } from "../classes/device.class";
 import {
   devices,
   assignDeviceIpAddress,
@@ -25,10 +25,18 @@ export function initDeviceRoutes(app: Express) {
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
     let { id, name } = request.body;
-    let device = devices.find((device) => device.id === id);
 
+    let device = devices.find((device) => device.id === id);
     if (!device) {
-      device = new Device(id, name, DeviceTypesToDataTypes[name]);
+      let DeviceClass = Device;
+      switch (name) {
+        case 'blinds':
+          DeviceClass = DeviceBlinds;
+          break;
+        default:
+          DeviceClass = Device;
+      }
+      device = new DeviceClass(id, name, DeviceTypesToDataTypes[name]);
       devices.push(device);
       assignDeviceIpAddress(id, request.ip);
       io.emit("device-declare", buildClientDeviceData(device));

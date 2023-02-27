@@ -1,10 +1,10 @@
 import { log, EVENT_TYPES } from "../logger";
-import { Device, DeviceData } from "../classes/device.class";
+import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
 import JSONdb from "simple-json-db";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
-export const devices: Device[] = [
+export const devices: (Device | DeviceBlinds)[] = [
   // new Device('23239', 'test-device', 'value')
 ];
 
