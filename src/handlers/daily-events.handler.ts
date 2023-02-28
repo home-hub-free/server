@@ -17,7 +17,7 @@ export let dailyEvents: any = {
 const atSunrise = [];
 const atSunset = [];
 
-setTimeout(() => {
+setInterval(() => {
   let now = new Date();
   for (let i = devices.length - 1; i >= 0; i--) {
     const device = devices[i];
