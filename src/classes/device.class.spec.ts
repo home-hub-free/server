@@ -1,6 +1,6 @@
 import { Device } from './device.class';
-import { dailyEvents } from '../handlers/dailyEventsHandler';
-jest.mock('../handlers/dailyEventsHandler', () => ({
+import { dailyEvents } from '../handlers/daily-events.handler';
+jest.mock('../handlers/daily-events.handler', () => ({
     dailyEvents: {
         sunset: {time: new Date()},
         sunrise: {time: new Date()}

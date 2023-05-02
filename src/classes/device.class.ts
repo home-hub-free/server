@@ -34,8 +34,11 @@ export class Device {
   public lastPing: Date = new Date();
   /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
+   * Possible values:
    * HH: 0-23
    * MM: 0-59
+   * sunset/sunrise are also valid values to use in a range
+   * ea: [sunrise-12:00, sunset-22:00]
    */
   public operationalRanges: string[];
   private _timer: NodeJS.Timeout;
@@ -119,12 +122,12 @@ export class Device {
   }
 
   private validateOperationRanges() {
-    let validCount = 0;
-    let now = new Date().getTime();
-    if (!this.operationalRanges) {
+    if (this.operationalRanges.length === 0) {
       return true;
     }
 
+    let validCount = 0;
+    let now = new Date().getTime();
     // [HH:MM-HH:MM] (24h based)
     this.operationalRanges.forEach((range) => {
       let ranges = range.split('-');

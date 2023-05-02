@@ -3,7 +3,9 @@ import { Sensor } from '../classes/sensor.class';
 export const SensorsDB = new JSONdb('db/sensors.db.json');
 
 // These get populated as sensors join the local network
-export const sensors: Sensor[] = [];
+export const sensors: Sensor[] = [
+  // new Sensor('1234', 'test-sensor-1', 'boolean'),
+];
 
 export function updateSensor(sensorId: string, value: any) {
   let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);
