@@ -4,6 +4,8 @@ import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
 
+const TIME_TO_INACTIVE = 60 * 1000 * 5;
+
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
   'temp/humidity': 'value'
@@ -110,7 +112,7 @@ export class Sensor {
         id: this.id,
         value: false,
       });
-    }, 60 * 1000);
+    }, TIME_TO_INACTIVE);
   }
 
   /**

@@ -24,6 +24,15 @@ export function initEffectsRoutes(app: Express) {
     response.send(effects);
   });
 
+  app.post("/set-effects", (request, response) => {
+    let { effects } = request.body;
+    effects.forEach((effect) => {
+      effect.set.value = JSON.parse(effect.set.value);
+      effect.when.is = JSON.parse(effect.when.is);
+    });
+    EffectsDB.set('effects', effects);
+  });
+
   app.post("/set-effect", (request, response) => {
     let { effect } = request.body;
     let effects: IEffect[] = EffectsDB.get('effects') || [];
