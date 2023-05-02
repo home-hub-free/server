@@ -46,5 +46,6 @@ export function buildClientDeviceData(device: Device): DeviceData {
     value: device.value,
     type: device.type,
     manual: device.manual,
+    operationalRanges: device.operationalRanges,
   };
 }

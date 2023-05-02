@@ -17,7 +17,8 @@ export interface DeviceData {
   name: string,
   value: any,
   type: DeviceType,
-  manual: boolean
+  manual: boolean,
+  operationalRanges: string[]
 };
 
 export type DeviceList = Device[];
@@ -52,7 +53,7 @@ export class Device {
     this.id = id;
     this.name = name;
     this.type = type;
-    this.operationalRanges = operationalRanges;
+    this.operationalRanges = operationalRanges || [];
     this.mergeDBData();
   }
 
