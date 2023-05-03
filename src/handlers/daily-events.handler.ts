@@ -48,7 +48,7 @@ setInterval(() => {
       assistant.tempDifferenceAnnouncements.outsideHotterThanInside = true;
     } else {
       const outsideCooler = parseFloat(temperature) > forecast.hourlyTemperatures[now];
-      if (outsideCooler && assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
+      if (outsideCooler && assistant.tempDifferenceAnnouncements.outsideHotterThanInside && !assistant.tempDifferenceAnnouncements.outsideCoolerThanInside) {
         assistant.say('ouside temperature cooler than inside');
         assistant.tempDifferenceAnnouncements.outsideCoolerThanInside = true;
         
