@@ -4,7 +4,7 @@ import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
 
-const TIME_TO_INACTIVE = 60 * 1000 * 5;
+const TIME_TO_INACTIVE = 60 * 1000 * 2;
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
