@@ -24,6 +24,7 @@ export class Sensor {
   consecutiveActivations = 0;
   consecutiveActivationsTimer = null;
   lastPing: Date = new Date();
+  sensorType: 'motion' | 'temp/humidity';
 
   constructor(
     id: string,
@@ -33,6 +34,7 @@ export class Sensor {
     this.id = id;
     this.type = type;
     this.name = name;
+    this.sensorType = name as 'motion' | 'temp/humidity';
     this.mergeDBData();
     this.setSensorDBEffects();
 
@@ -124,6 +126,12 @@ export class Sensor {
    */
   private updateValueSensor(value: any) {
     this.value = value;
+    io.emit('sensor-update', {
+      id: this.id,
+      value: this.value.replaceAll(':', ', '),
+    });
+
+    // TODO: handle value effects
   }
 
   /**

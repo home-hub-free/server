@@ -21,6 +21,7 @@ export function buildClientSensorData(sensor: Sensor) {
     id: sensor.id,
     type: sensor.type,
     name: sensor.name,
-    value: sensor.value
+    value: sensor.value,
+    sensorType: sensor.sensorType,
   };
 }

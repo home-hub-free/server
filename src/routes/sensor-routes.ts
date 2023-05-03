@@ -24,12 +24,12 @@ export function initSensorRoutes(app: Express) {
     response.send(true);
   });
 
-  // Called whenever a sensor's data is updated and its notified to the server
+  // Called whenever a sensor's value is updated and its notified to the server
   app.post("/sensor-update", (request, response) => {
-    let { id } = request.body;
+    let { id, value } = request.body;
     let sensor = sensors.find((sensor) => String(sensor.id) === String(id));
-    if (sensor && request.body.value !== undefined) {
-      sensor.update(request.body.value);
+    if (sensor && value !== undefined) {
+      sensor.update(value);
       response.send(true);
     } else {
       response.send(false);
