@@ -2,9 +2,9 @@
 import moment from 'moment';
 import schedule from 'node-schedule';
 import { log, EVENT_TYPES } from '../logger';
-import { updateWeatherData } from './forecast.handler';
+import { forecast, updateWeatherData } from './forecast.handler';
 import { readCalendars, ICalendarData, IEventData } from './google-calendar.handler';
-import { assistant } from '../v-assistant/v-assistant.class';
+import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
 import { sensors } from './sensodr.handler';
 import { devices } from './device.handler';
 
@@ -17,6 +17,7 @@ export let dailyEvents: any = {
 const atSunrise = [];
 const atSunset = [];
 
+// Every Minute interval
 setInterval(() => {
   if (process.env.LOCAL === 'true') return;
   
@@ -32,6 +33,29 @@ setInterval(() => {
     if (offlineTime > 60 * 1000) sensors.splice(i, 1)
   }
 }, 60 * 1000);
+
+// Every 30 minutes interval
+setInterval(() => {
+  updateWeatherData();
+  const houseData = VAssistantDB.get('houseData');
+  if (houseData && houseData.insideSensorTemperature) {
+    const sensor = sensors.find((sensor) => sensor.id === houseData.insideSensorTemperature);
+    const temperature = sensor && sensor.value && sensor.value.split(':')[0];
+    const now = new Date().getHours();
+    const outsideHotter = parseFloat(temperature) < forecast.hourlyTemperatures[now];
+    if (outsideHotter && !assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
+      assistant.say('outside temperature is now higher than inside temperature');
+      assistant.tempDifferenceAnnouncements.outsideHotterThanInside = true;
+    } else {
+      const outsideCooler = parseFloat(temperature) > forecast.hourlyTemperatures[now];
+      if (outsideCooler && assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
+        assistant.say('ouside temperature cooler than inside');
+        assistant.tempDifferenceAnnouncements.outsideCoolerThanInside = true;
+        
+      }
+    }
+  }
+}, 60 * 1000 * 30);
 
 export function initDailyEvents() {
   var rule = new schedule.RecurrenceRule();

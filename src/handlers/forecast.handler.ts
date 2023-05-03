@@ -14,7 +14,8 @@ export interface IForecastData {
   dayAvgTemp: number,
   humidityAvg: number,
   description: string,
-  isRising: boolean
+  isRising: boolean,
+  hourlyTemperatures: number[]
 }
 
 export interface IAstroData {
@@ -40,7 +41,8 @@ export let forecast: IForecastData = {
   dayAvgTemp: 0,
   humidityAvg: 0,
   description: '',
-  isRising: null
+  isRising: null,
+  hourlyTemperatures: [],
 };
 
 export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
@@ -89,6 +91,7 @@ function updateForecastData(result) {
   // Define the time of the day with the highest temperature
   // This is an array of length 23, one index per hour of the day
   let temperatures = forecastDay.hour.map(hourData => hourData.temp_c);
+  forecast.hourlyTemperatures = temperatures;
   let highestTemp = Math.max(...temperatures)
   let hour = temperatures.indexOf(highestTemp);
   forecast.maxTemp.value = highestTemp;

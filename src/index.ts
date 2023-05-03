@@ -49,6 +49,7 @@ const DBFiles = [
   'db/devices.db.json',
   'db/sensors.db.json',
   'db/effects.db.json',
+  'db/v-assistant.db.json'
 ];
 const CalendarFile = ['google-calendars.json'];
 

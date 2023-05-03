@@ -2,6 +2,7 @@ import { getDayTimeWord, IForecastData, updateWeatherData } from '../handlers/fo
 import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets';
 import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
+import JSONdb from 'simple-json-db';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
@@ -10,6 +11,8 @@ const Polly = new AWS.Polly({
   region: 'us-east-1'
 });
 
+export const VAssistantDB = new JSONdb('db/v-assistant.db.json');
+
 interface ISpeechPromise {
   text: string,
   resolve: (value: unknown) => void,
@@ -17,6 +20,11 @@ interface ISpeechPromise {
 }
 
 class VAssistant {  
+
+  public tempDifferenceAnnouncements = {
+    outsideHotterThanInside: false,
+    outsideCoolerThanInside: false,
+  }
 
   public autoForecasted = {
     morning: false,

@@ -1,5 +1,5 @@
 import { Express } from 'express';
-import { assistant } from '../v-assistant/v-assistant.class';
+import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
 import { readCalendars } from '../handlers/google-calendar.handler';
 
 export function initVAssistantRoutes(app: Express) {
@@ -13,8 +13,9 @@ export function initVAssistantRoutes(app: Express) {
   app.get("/emma", (request, response) => {
     let forecasted = assistant.autoForecasted;
     let latest = assistant.latestSpeeches;
+    let houseData = VAssistantDB.get('houseData') || {};
   
-    response.send({ forecasted, latest });
+    response.send({ forecasted, latest, houseData });
   });
 
   app.get("/emma-weather", (request, response) => {
@@ -36,5 +37,18 @@ export function initVAssistantRoutes(app: Express) {
       });
       response.send(calendars);
     });
+  });
+
+  app.post("/update-house-data", (request, response) => {
+    const { property, value } = request.body;
+    const houseData = VAssistantDB.get('houseData') || {};
+    if (value === 'null') {
+      houseData[property] = null;
+    } else {
+      houseData[property] = value;
+    }
+
+    VAssistantDB.set('houseData', houseData);
+    response.send(true);
   });
 }
