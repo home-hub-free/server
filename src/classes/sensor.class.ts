@@ -128,7 +128,7 @@ export class Sensor {
     this.value = value;
     io.emit('sensor-update', {
       id: this.id,
-      value: this.value.replaceAll(':', ', '),
+      value: this.value,
     });
 
     // TODO: handle value effects
