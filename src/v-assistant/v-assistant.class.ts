@@ -225,7 +225,7 @@ class VAssistant {
   }
 }
 
-export const assistant = new VAssistant(['10-23:59']);
+export const assistant = new VAssistant(['7-23:59']);
 
 if (process.env.USER === 'pi') {
   setInterval(() => {
