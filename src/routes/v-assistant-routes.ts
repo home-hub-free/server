@@ -5,7 +5,7 @@ import { readCalendars } from '../handlers/google-calendar.handler';
 export function initVAssistantRoutes(app: Express) {
 
   app.post('/emma-say', (request, response) => {
-    assistant.say(request.body.text).catch((err) => {
+    assistant.say(request.body.text, true).catch((err) => {
       response.send(err);
     }).finally(() => response.send(true));
   });

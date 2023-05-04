@@ -151,7 +151,7 @@ export class Sensor {
     let now = new Date();
     let hour = now.getHours();
     let twoHoursHavePassed = now.getTime() - assistant.lastAutoForecast > 1000 * 60 * 60 * 2;
-    if (this.consecutiveActivations >= 5 && hour >= 5 && twoHoursHavePassed) {
+    if (this.consecutiveActivations >= 5 && twoHoursHavePassed) {
       let timeOfDay = hour >= 6 && hour < 12 ?
         'morning' : hour >= 12 && hour < 18 ?
         'afternoon' : 'evening';

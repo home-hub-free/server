@@ -2,13 +2,13 @@ import JSONdb from 'simple-json-db';
 import { Sensor } from '../classes/sensor.class';
 export const SensorsDB = new JSONdb('db/sensors.db.json');
 
-// const testHumiditySensor = new Sensor('123', 'temp/humidity', 'value')
-// testHumiditySensor.value = '23.5:10.5'
+const testHumiditySensor = new Sensor('123', 'temp/humidity', 'value')
+testHumiditySensor.value = '23.5:10.5'
 
 // These get populated as sensors join the local network
 export const sensors: Sensor[] = [
   // new Sensor('1234', 'motion', 'boolean'),
-  // testHumiditySensor
+  testHumiditySensor
   // new Sensor('123', 'temp/humidity', 'value'),
 ];
 

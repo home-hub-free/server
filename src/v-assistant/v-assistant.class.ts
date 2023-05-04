@@ -3,6 +3,7 @@ import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets'
 import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
 import JSONdb from 'simple-json-db';
+import { sensors } from '../handlers/sensodr.handler';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
@@ -43,14 +44,26 @@ class VAssistant {
     Text: '',
     VoiceId: 'Emma'
   };
+  private allowedSpeakTimeRanges = [];
 
-  constructor() { }
+  /**
+   * 
+   * @param allowedSpeakTimeRange Time range where the v-assistant is not allowed to give speecj
+   * anouncements
+   * formatted as [HH:MM-HH:MM, ...]
+   */
+  constructor(allowedSpeakTimeRanges?: string[]) {
+    this.allowedSpeakTimeRanges = allowedSpeakTimeRanges;
+  }
 
   /**
    * Handles the creating of the speech and queue (if necessary) for emma's voice
    * @param text Text that will be read out-loud
+   * @param force Force speech ignoring allowedSpeakTimeRanges validations
    */
-  say(text: string): Promise<boolean> {
+  say(text: string, force?: boolean): Promise<boolean> {
+
+    if (!this.isAllowedToSpeak() && !force) return Promise.resolve(false);
 
     this.latestSpeeches.push(new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + ' ' + text);
     if (this.latestSpeeches.length > 10) {
@@ -123,15 +136,26 @@ class VAssistant {
     let ender = SentenceEnders[Math.floor(Math.random() * SentenceEnders.length)];
 
     let emmaGreet = `${greet} ${greetTime === 'morning' ? connector + ',' : ''}`;
-    let emmaCurrentWeather = `For today's weather, the current temperature is ${data.currentTemp}° celcious ${data.isRising ? 'and rising' : data.isRising === null ? '' : 'and going down'}.`;
+    let emmaCurrentWeather = `The current temperature is ${data.currentTemp}° ${data.isRising ? 'and rising' : data.isRising === null ? '' : 'and going down'}.`;
+    const houseData = VAssistantDB.get('houseData');
+    const insideSensorTemperatureId = houseData.insideSensorTemperature || null;
+    let insideSensorTemperature = sensors.find((sensor) => sensor.id === insideSensorTemperatureId);
+    let emmaInsideTemperature = '';
+
+    if (insideSensorTemperature) {
+      const temp = insideSensorTemperature.value.split(':')[0];
+      emmaInsideTemperature = 'Inside temperature sensor reads ' + temp + '°.'
+    }
     
     let showMax = data.maxTemp.hour > new Date().getHours();
-    let emmaMaxTemperature = showMax ? `Today's theoretical maximum is ${data.maxTemp.value}° celcious.` : '';
+    let emmaMaxTemperature = showMax ? `Today's maximum is ${data.maxTemp.value}°.` : '';
+
+
 
     let emmaWeatherDescription = `${data.description}.`;
     let emmaDone = ender;
 
-    return `${emmaGreet} ${emmaCurrentWeather} ${emmaMaxTemperature} ${emmaWeatherDescription} ${emmaDone}`;
+    return `${emmaGreet} ${emmaCurrentWeather} ${emmaInsideTemperature} ${emmaMaxTemperature} ${emmaWeatherDescription} ${emmaDone}`;
   }
 
   private buildCalendarEventSentence(calendarName, eventData) {
@@ -160,9 +184,48 @@ class VAssistant {
 
     return `${start}, ${calendar}, ${type} "${eventData.name}", ${time}`;
   }
+
+  private isAllowedToSpeak() {
+    if (this.allowedSpeakTimeRanges.length === 0) {
+      return true;
+    }
+
+    let validCount = 0;
+    let now = new Date();
+
+    this.allowedSpeakTimeRanges.forEach((range) => {
+      let ranges = range.split('-');
+      let from: Date = this.parseTimeStringToDate(ranges[0]);
+      let to: Date = this.parseTimeStringToDate(ranges[1]);
+
+      const laterThanRangeStart = now.getTime() >= from.getTime();
+      const earlierThanRangeEnd = now.getTime() <= to.getTime();
+      if (laterThanRangeStart && earlierThanRangeEnd) {
+        validCount++;
+      }
+
+      return validCount > 0
+    });
+  }
+
+  private parseTimeStringToDate(time: string): Date {
+    let date = new Date();
+    let splitTime = time.split(':');
+    let hours = parseInt(splitTime[0]);
+    let minutes = 0;
+
+    if (splitTime.length == 2) {
+      minutes = parseInt(splitTime[1]);
+    } 
+
+    date.setHours(hours);
+    date.setMinutes(minutes);
+
+    return date;
+  }
 }
 
-export const assistant = new VAssistant();
+export const assistant = new VAssistant(['7:00-23:59']);
 
 if (process.env.USER === 'pi') {
   setInterval(() => {

@@ -36,25 +36,26 @@ setInterval(() => {
 
 // Every 30 minutes interval
 setInterval(() => {
-  updateWeatherData();
-  const houseData = VAssistantDB.get('houseData');
-  if (houseData && houseData.insideSensorTemperature) {
-    const sensor = sensors.find((sensor) => sensor.id === houseData.insideSensorTemperature);
-    const temperature = sensor && sensor.value && sensor.value.split(':')[0];
-    const now = new Date().getHours();
-    const outsideHotter = parseFloat(temperature) < forecast.hourlyTemperatures[now];
-    if (outsideHotter && !assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
-      assistant.say('outside temperature is now higher than inside temperature');
-      assistant.tempDifferenceAnnouncements.outsideHotterThanInside = true;
-    } else {
-      const outsideCooler = parseFloat(temperature) > forecast.hourlyTemperatures[now];
-      if (outsideCooler && assistant.tempDifferenceAnnouncements.outsideHotterThanInside && !assistant.tempDifferenceAnnouncements.outsideCoolerThanInside) {
-        assistant.say('ouside temperature cooler than inside');
-        assistant.tempDifferenceAnnouncements.outsideCoolerThanInside = true;
-        
+  updateWeatherData().then(() => {
+    const houseData = VAssistantDB.get('houseData');
+    const insideTempSensor = houseData && houseData.insideSensorTemperature;
+    if (insideTempSensor) {
+      const sensor = sensors.find((sensor) => sensor.id === houseData.insideSensorTemperature);
+      const temperature = sensor && sensor.value && sensor.value.split(':')[0];
+      const currentHour = new Date().getHours();
+      const outsideHotter = parseFloat(temperature) < forecast.hourlyTemperatures[currentHour];
+      const outsideCooler = parseFloat(temperature) > forecast.hourlyTemperatures[currentHour];
+      if (outsideHotter && !assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
+        assistant.say('outside temperature is now higher than inside temperature').then((spoke) => {
+          assistant.tempDifferenceAnnouncements.outsideHotterThanInside = spoke;
+        });
+      } else if (outsideCooler && !assistant.tempDifferenceAnnouncements.outsideCoolerThanInside) {
+        assistant.say('ouside temperature cooler than inside').then((spoke) => {
+          assistant.tempDifferenceAnnouncements.outsideCoolerThanInside = spoke;
+        });
       }
     }
-  }
+  });
 }, 60 * 1000 * 30);
 
 export function initDailyEvents() {
