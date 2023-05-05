@@ -186,6 +186,7 @@ class VAssistant {
   }
 
   private isAllowedToSpeak() {
+    return true;
     if (this.allowedSpeakTimeRanges.length === 0) {
       return true;
     }
