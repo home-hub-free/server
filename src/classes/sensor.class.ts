@@ -167,7 +167,7 @@ export class Sensor {
 
   private getSensorTemp(): number {
     if (this.sensorType !== 'temp/humidity') return null;
-    return parseFloat(this.value.split[0]);
+    return parseFloat(this.value.split(':')[0]);
   }
 
   private setBooleanSensorEffect(effect: any) {
