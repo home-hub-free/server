@@ -6,6 +6,8 @@ import { io } from "../handlers/websockets.handler";
 
 type DeviceType = 'boolean' | 'value';
 
+type DeviceCategory = 'light' | 'cooling-system' | 'dimmable-light' | 'blinds'
+
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
   'cooling-system': 'boolean',
@@ -18,6 +20,7 @@ export interface DeviceData {
   name: string,
   value: any,
   type: DeviceType,
+  deviceCategory: string;
   manual: boolean,
   operationalRanges: string[]
 };
@@ -32,6 +35,7 @@ export class Device {
   public id: string;
   public name: string;
   public type: DeviceType;
+  public deviceCategory: DeviceCategory;
   public lastPing: Date = new Date();
   /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
@@ -57,6 +61,8 @@ export class Device {
     this.id = id;
     this.name = name;
     this.type = type;
+    // When constructed the name original name is the device category
+    this.deviceCategory = name as DeviceCategory;
     this.operationalRanges = operationalRanges || [];
     this.mergeDBData();
   }
