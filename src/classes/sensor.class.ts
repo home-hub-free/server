@@ -132,6 +132,7 @@ export class Sensor {
     });
 
     // TODO: handle value effects
+    this.effects.value.forEach(effect => effect());
   }
 
   /**
@@ -179,9 +180,9 @@ export class Sensor {
     });
   }
 
-  private setValueSensorEffect(effect: any) {
-    let value = parseFloat(effect.when.is);
+  private setValueSensorEffect(effect: any) {    
     this.effects.value.push(() => {
+      let value = parseFloat(effect.when.is);
       let device = devices.find(device => device.id === effect.set.id);
       let temp = this.getSensorTemp();
       if (device && temp > value && device.value !== effect.set.value) {
