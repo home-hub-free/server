@@ -18,6 +18,7 @@ export class Sensor {
   value: any;
   timeout: NodeJS.Timeout;
   effects = {
+    value: [],
     on: [],
     off: []
   };
@@ -59,13 +60,12 @@ export class Sensor {
   }
 
   setEffect(effect: any) {
-    let prop = !effect.when.is || effect.when.is === 'false' ? 'off' : 'on';
-    this.effects[prop].push(() => {
-      let device = devices.find(device => device.id === effect.set.id);
-      if (device && device.value !== effect.set.value) {
-        device.autoTrigger(effect.set.value);
-      }
-    });
+    switch (this.sensorType) {
+      case 'motion':
+        this.setBooleanSensorEffect(effect);
+      case 'temp/humidity':
+        this.setValueSensorEffect(effect)
+    }
   }
 
   mergeDBData() {
@@ -163,8 +163,30 @@ export class Sensor {
       this.consecutiveActivations = 0;
     }
   }
-}
 
-// sensors.push(
-//   new Sensor('12301', 'Fake sensor', 'boolean')
-// )
+  private getSensorTemp(): number {
+    if (this.sensorType !== 'temp/humidity') return null;
+    return parseFloat(this.value.split[0]);
+  }
+
+  private setBooleanSensorEffect(effect: any) {
+    let prop = !effect.when.is || effect.when.is === 'false' ? 'off' : 'on';
+    this.effects[prop].push(() => {
+      let device = devices.find(device => device.id === effect.set.id);
+      if (device && device.value !== effect.set.value) {
+        device.autoTrigger(effect.set.value);
+      }
+    });
+  }
+
+  private setValueSensorEffect(effect: any) {
+    let value = parseFloat(effect.when.is);
+    this.effects.value.push(() => {
+      let device = devices.find(device => device.id === effect.set.id);
+      let temp = this.getSensorTemp();
+      if (device && temp > value && device.value !== effect.set.value) {
+        device.autoTrigger(effect.set.value);
+      }
+    });
+  }
+}
