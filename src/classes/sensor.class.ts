@@ -182,13 +182,11 @@ export class Sensor {
 
   private setValueSensorEffect(effect: any) {    
     this.effects.value.push(() => {
-      console.log('Ran value sensor effect');
       let value = parseFloat(effect.when.is);
       let device = devices.find(device => device.id === effect.set.id);
       let temp = this.getSensorTemp();
       if (device && temp > value && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
-        console.log('auto triggered for effecrt', effect);
       }
     });
   }
