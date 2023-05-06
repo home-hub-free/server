@@ -8,6 +8,7 @@ type DeviceType = 'boolean' | 'value';
 
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
+  'cooling-system': 'boolean',
   'dimmable-light': 'value',
   'blinds': 'value'
 };
