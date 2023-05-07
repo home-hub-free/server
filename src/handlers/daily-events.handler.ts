@@ -46,12 +46,18 @@ setInterval(() => {
       const outsideHotter = parseFloat(temperature) < forecast.hourlyTemperatures[currentHour];
       const outsideCooler = parseFloat(temperature) > forecast.hourlyTemperatures[currentHour];
       if (outsideHotter && !assistant.tempDifferenceAnnouncements.outsideHotterThanInside) {
-        assistant.say('outside temperature is now higher than inside temperature').then((spoke) => {
+        assistant.say('outside temperature is higher than inside temperature').then((spoke) => {
           assistant.tempDifferenceAnnouncements.outsideHotterThanInside = spoke;
+          if (houseData.controlsCooling) {
+            assistant.toggleCoolingDevices(true);
+          }
         });
       } else if (outsideCooler && !assistant.tempDifferenceAnnouncements.outsideCoolerThanInside) {
-        assistant.say('ouside temperature cooler than inside').then((spoke) => {
+        assistant.say('ouside temperature is cooler than inside').then((spoke) => {
           assistant.tempDifferenceAnnouncements.outsideCoolerThanInside = spoke;
+          if (houseData.controlsCooling) {
+            assistant.toggleCoolingDevices(false);
+          }
         });
       }
     }

@@ -4,6 +4,7 @@ import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
 import JSONdb from 'simple-json-db';
 import { sensors } from '../handlers/sensodr.handler';
+import { devices } from '../handlers/device.handler';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
@@ -98,6 +99,21 @@ class VAssistant {
   sayCalendarEvent(calendarName: string, eventData: IEventData) {
     let sentence = this.buildCalendarEventSentence(calendarName, eventData);
     this.say(sentence);
+  }
+
+  toggleCoolingDevices(value: boolean) {
+    let toggledDevices = 0;
+    let coolingDevices = devices.filter((device) => device.deviceCategory === 'cooling-system');
+    coolingDevices.forEach((device) => {
+      let currentValue = device.value;
+      device.autoTrigger(value);
+      let newValue = device.value;
+      if (currentValue !== newValue) toggledDevices++;
+    });
+
+    if (toggledDevices) {
+      this.say('turned cooling devices ' + value ? 'on' : 'off');
+    }
   }
 
   /**
