@@ -199,18 +199,12 @@ export class Sensor {
       let sensorTemp = this.getSensorTemp();
       let reachesDesiredValue = false;
 
-      console.log('Comparassion: ', comparassion);
       if (comparassion === 'higher-than') {
         reachesDesiredValue = sensorTemp > requiredTemperature;
       } else if (comparassion === 'lower-than') {
         reachesDesiredValue = sensorTemp < requiredTemperature;
       }
 
-      console.log('Req. Temp: ', requiredTemperature);
-      console.log('Current temp: ', sensorTemp);
-      console.log(device);
-      console.log('Device value: ', device.value);
-      console.log('Effect value: ', effect.set.value);
       if (device && reachesDesiredValue && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
       }
