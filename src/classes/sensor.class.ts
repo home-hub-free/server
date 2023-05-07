@@ -192,15 +192,22 @@ export class Sensor {
     this.effects.value.push(() => {
       let target = effect.when.is.split(':');
       let comparassion = target[0];
-      let value = parseFloat(target[1]);
+      let requiredTemperature = parseFloat(target[1]);
+      let humidity = parseFloat(target[2]);
+
       let device = devices.find(device => device.id === effect.set.id);
       let sensorTemp = this.getSensorTemp();
       let reachesDesiredValue = false;
+
+      console.log('Comparassion: ', comparassion);
       if (comparassion === 'higher-than') {
-        reachesDesiredValue = sensorTemp > value;
+        reachesDesiredValue = sensorTemp > requiredTemperature;
       } else if (comparassion === 'lower-than') {
-        reachesDesiredValue = sensorTemp < value;
+        reachesDesiredValue = sensorTemp < requiredTemperature;
       }
+
+      console.log('Req. Temp: ', requiredTemperature);
+      console.log('Current temp: ', sensorTemp)
       if (device && reachesDesiredValue && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
       }
