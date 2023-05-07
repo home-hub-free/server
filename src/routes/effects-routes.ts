@@ -31,13 +31,22 @@ export function initEffectsRoutes(app: Express) {
       effect.when.is = JSON.parse(effect.when.is);
     });
     EffectsDB.set('effects', effects);
+
+    sensors.forEach((sensor) => sensor.clearEffects());
+
+    effects.forEach((effect) => {
+      let sensorAffected = sensors.find(sensor => sensor.id === effect.when.id);
+      if (sensorAffected) {
+        sensorAffected.setEffect(effect);
+      }
+    });
   });
 
   app.post("/set-effect", (request, response) => {
     let { effect } = request.body;
     let effects: IEffect[] = EffectsDB.get('effects') || [];
     effect.set.value = JSON.parse(effect.set.value);
-    effect.when.is = JSON.parse(effect.when.is);
+    effect.when.is = effect.when.is.indexOf(":") > -1 ? effect.when.is : JSON.parse(effect.when.is);
     effects.push(effect);
     EffectsDB.set('effects', effects);
 

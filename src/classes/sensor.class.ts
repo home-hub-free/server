@@ -64,7 +64,7 @@ export class Sensor {
       case 'motion':
         this.setBooleanSensorEffect(effect);
       case 'temp/humidity':
-        this.setValueSensorEffect(effect)
+        this.setTempHumidityEffect(effect)
     }
   }
 
@@ -86,6 +86,14 @@ export class Sensor {
       sensorEffects.forEach((e) => {
         this.setEffect(e);
       });
+    }
+  }
+
+  clearEffects() {
+    this.effects = {
+      on: [],
+      off: [],
+      value: [],
     }
   }
 
@@ -180,12 +188,20 @@ export class Sensor {
     });
   }
 
-  private setValueSensorEffect(effect: any) {    
+  private setTempHumidityEffect(effect: any) {    
     this.effects.value.push(() => {
-      let value = parseFloat(effect.when.is);
+      let target = effect.when.is.split(':');
+      let comparassion = target[0];
+      let value = parseFloat(target[1]);
       let device = devices.find(device => device.id === effect.set.id);
-      let temp = this.getSensorTemp();
-      if (device && temp > value && device.value !== effect.set.value) {
+      let sensorTemp = this.getSensorTemp();
+      let reachesDesiredValue = false;
+      if (comparassion === 'higher-than') {
+        reachesDesiredValue = sensorTemp > value;
+      } else if (comparassion === 'lower-than') {
+        reachesDesiredValue = sensorTemp < value;
+      }
+      if (device && reachesDesiredValue && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
       }
     });
