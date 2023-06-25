@@ -38,11 +38,12 @@ export function initDeviceRoutes(app: Express) {
       }
       device = new DeviceClass(id, name, DeviceTypesToDataTypes[name]);
       devices.push(device);
-      assignDeviceIpAddress(id, request.ip);
       io.emit("device-declare", buildClientDeviceData(device));
     } else {
       device.lastPing = new Date();
     }
+    assignDeviceIpAddress(id, request.ip);
+
     response.send(true);
   });
 
