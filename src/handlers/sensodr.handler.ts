@@ -17,7 +17,11 @@ export function updateSensor(sensorId: string, value: any) {
   let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);
   if (sensor) {
     sensor.update(value);
-    if (value === 1 && assistant.screenSensors.indexOf(sensor.id)) {
+    /**
+     * TODO: make the sensor that controls the screen configurable,
+     * for now we just let every single sensor restart the timer
+     *  */    
+    if (value === 1) {
       assistant.handleScreenTimer();
     }
   };
