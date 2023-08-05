@@ -188,7 +188,7 @@ export class Sensor {
     });
   }
 
-  private setTempHumidityEffect(effect: any) {    
+  private setTempHumidityEffect(effect: any) {  
     this.effects.value.push(() => {
       let target = effect.when.is.split(':');
       let comparassion = target[0];

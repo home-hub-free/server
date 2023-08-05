@@ -1,5 +1,6 @@
 import JSONdb from 'simple-json-db';
 import { Sensor } from '../classes/sensor.class';
+import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
 export const SensorsDB = new JSONdb('db/sensors.db.json');
 
 // const testHumiditySensor = new Sensor('123', 'temp/humidity', 'value')
@@ -14,7 +15,12 @@ export const sensors: Sensor[] = [
 
 export function updateSensor(sensorId: string, value: any) {
   let sensor: Sensor = sensors.find(sensor => sensor.id === sensorId);
-  if (sensor) sensor.update(value);
+  if (sensor) {
+    sensor.update(value);
+    if (value === 1 && assistant.screenSensors.indexOf(sensor.id)) {
+      assistant.handleScreenTimer();
+    }
+  };
 }
 
 export function getSensorsData() {

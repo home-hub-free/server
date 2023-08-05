@@ -5,6 +5,7 @@ import { IEventData } from '../handlers/google-calendar.handler';
 import JSONdb from 'simple-json-db';
 import { sensors } from '../handlers/sensodr.handler';
 import { devices } from '../handlers/device.handler';
+import { exec } from 'child_process';
 const player = require('play-sound')({});
 const AWS = require('aws-sdk');
 const emmaSpeechPath = './src/sounds/speech/say.mp3';
@@ -36,6 +37,7 @@ class VAssistant {
 
   public latestSpeeches = [];
   public lastAutoForecast: number = 0;
+  public screenSensors = [];
 
   private speechQueue: ISpeechPromise[] = [];
   private pollyOptions = {
@@ -46,7 +48,8 @@ class VAssistant {
     VoiceId: 'Emma'
   };
   private allowedSpeakTimeRanges = [];
-
+  private screenTimeout = null;
+  private screenTimeOn = 1000 * 60 * 5;
   /**
    * 
    * @param allowedSpeakTimeRange Time range where the v-assistant is not allowed to give speecj
@@ -55,6 +58,12 @@ class VAssistant {
    */
   constructor(allowedSpeakTimeRanges?: string[]) {
     this.allowedSpeakTimeRanges = allowedSpeakTimeRanges;
+    const screenData = VAssistantDB.get("screenData");
+    if (screenData && screenData.motionSensors) {
+      this.screenSensors = screenData.motionSensors;
+    } else {
+      exec('vcgencmd display_power 1');
+    }
   }
 
   /**
@@ -114,6 +123,17 @@ class VAssistant {
     if (toggledDevices) {
       this.say('turned cooling devices ' + value ? 'on' : 'off');
     }
+  }
+
+  handleScreenTimer() {
+    if (this.screenTimeout) {
+      clearTimeout(this.screenTimeout);
+    }
+    exec('vcgencmd display_power 1');
+    this.screenTimeout = setTimeout(() => {
+      this.screenTimeout = null;
+      exec('vcgencmd display_power 0');
+    }, this.screenTimeOn);
   }
 
   /**
