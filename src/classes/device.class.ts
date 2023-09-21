@@ -6,7 +6,7 @@ import { io } from "../handlers/websockets.handler";
 
 type DeviceType = 'boolean' | 'value';
 
-type DeviceCategory = 'light' | 'cooling-system' | 'dimmable-light' | 'blinds'
+type DeviceCategory = 'light' | 'cooling-system' | 'dimmable-light' | 'blinds' | 'camera'
 
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
@@ -23,6 +23,7 @@ export interface DeviceData {
   deviceCategory: string;
   manual: boolean,
   operationalRanges: string[]
+  ip?: string
 };
 
 export type DeviceList = Device[];
@@ -196,25 +197,49 @@ export class Device {
 }
 
 export class DeviceBlinds extends Device {
+  spin() {
+    return new Promise((resolve, reject) => {
+      if (!this.ip) {
+        log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
+      }
+      axios.get(`http://${this.ip}/spin`).then(() => {
+        log(EVENT_TYPES.device_triggered, [`Blinds spinned, ${this.name}, ${this.value}`]);
+        resolve(true);
+      });
+    });
+  }
+
   setHomeValue() {
     return new Promise((resolve, reject) => {
       if (!this.ip) {
         log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
       }
       axios.get(`http://${this.ip}/home-position`).then(() => {
-        log(EVENT_TYPES.device_triggered, [`Blinds Homed, ${this.name}, ${this.value}`]);
+        log(EVENT_TYPES.device_triggered, [`Blinds Homed`]);
         resolve(true);
       });
     });
   }
 
-  setMaxValue() {
+  setLimitValue() {
     return new Promise((resolve, reject) => {
       if (!this.ip) {
         log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
       }
       axios.get(`http://${this.ip}/set-limit`).then(() => {
-        log(EVENT_TYPES.device_triggered, [`Blinds Homed, ${this.name}, ${this.value}`]);
+        log(EVENT_TYPES.device_triggered, [`Blinds Limit Set, ${this.name}, ${this.value}`]);
+        resolve(true);
+      });
+    });
+  }
+
+  switchDirection() {
+    return new Promise((resolve, reject) => {
+      if (!this.ip) {
+        log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
+      }
+      axios.get(`http://${this.ip}/switch-direction`).then(() => {
+        log(EVENT_TYPES.device_triggered, [`Blinds Switch directio, ${this.name}, ${this.value}`]);
         resolve(true);
       });
     });

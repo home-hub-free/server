@@ -64,6 +64,31 @@ export function initDeviceRoutes(app: Express) {
       });
   });
 
+  app.post("/device-blinds-configure", (request, response) => {
+    const { id, action } = request.body;
+    let device: DeviceBlinds = devices.find((device) => device.id === id) as DeviceBlinds;
+    let result = false;
+    if (device) {
+      result = true;
+      switch (action) {
+        case 'spin':
+          device.spin();
+          break;
+        case 'switch-direction':
+          device.switchDirection();
+          break;
+        case 'home-position':
+          device.setHomeValue();
+          break;
+        case 'set-limit':
+          device.setLimitValue();
+          break;
+      }
+    }
+
+    response.send(result);
+  });
+
   // Updates information about a device, this information live in DB
   app.post("/devices-data-set", (request, response) => {
     let device = devices.find((device) => device.id === request.body.id);
