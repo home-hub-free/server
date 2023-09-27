@@ -14,6 +14,10 @@ const Polly = new AWS.Polly({
   region: 'us-east-1'
 });
 
+if (!fs.existsSync('./src/sounds/speech/')) {
+  fs.mkdirSync('./src/sounds/speech/');
+}
+
 export const VAssistantDB = new JSONdb('db/v-assistant.db.json');
 
 interface ISpeechPromise {
