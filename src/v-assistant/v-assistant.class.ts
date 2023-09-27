@@ -174,7 +174,7 @@ class VAssistant {
     let emmaGreet = `${greet} ${greetTime === 'morning' ? connector + ',' : ''}`;
     let emmaCurrentWeather = `The current temperature is ${data.currentTemp}° ${data.isRising ? 'and rising' : data.isRising === null ? '' : 'and going down'}.`;
     const houseData = VAssistantDB.get('houseData');
-    const insideSensorTemperatureId = houseData.insideSensorTemperature || null;
+    const insideSensorTemperatureId = houseData && houseData.insideSensorTemperature || null;
     let insideSensorTemperature = sensors.find((sensor) => sensor.id === insideSensorTemperatureId);
     let emmaInsideTemperature = '';
 
@@ -185,8 +185,6 @@ class VAssistant {
     
     let showMax = data.maxTemp.hour > new Date().getHours();
     let emmaMaxTemperature = showMax ? `Today's maximum is ${data.maxTemp.value}°.` : '';
-
-
 
     let emmaWeatherDescription = `${data.description}.`;
     let emmaDone = ender;
