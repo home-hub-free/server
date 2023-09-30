@@ -5,7 +5,7 @@ import { log, EVENT_TYPES } from '../logger';
 import { forecast, updateWeatherData } from './forecast.handler';
 import { readCalendars, ICalendarData, IEventData } from './google-calendar.handler';
 import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
-import { sensors } from './sensodr.handler';
+import { sensors } from './sensor.handler';
 import { devices } from './device.handler';
 
 export let dailyEvents: any = {

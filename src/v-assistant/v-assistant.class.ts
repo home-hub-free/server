@@ -3,7 +3,7 @@ import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets'
 import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
 import JSONdb from 'simple-json-db';
-import { sensors } from '../handlers/sensodr.handler';
+import { sensors } from '../handlers/sensor.handler';
 import { devices } from '../handlers/device.handler';
 import { exec } from 'child_process';
 const player = require('play-sound')({});

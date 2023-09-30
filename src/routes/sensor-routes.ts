@@ -1,5 +1,5 @@
 import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
-import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensodr.handler";
+import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensor.handler";
 import { Express } from "express";
 import { io } from "../handlers/websockets.handler";
 

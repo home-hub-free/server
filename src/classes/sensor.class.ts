@@ -1,5 +1,5 @@
 import { devices } from '../handlers/device.handler';
-import { SensorsDB } from '../handlers/sensodr.handler';
+import { SensorsDB } from '../handlers/sensor.handler';
 import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';

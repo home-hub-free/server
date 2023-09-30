@@ -1,6 +1,6 @@
 import { Express } from "express";
 import JSONdb from "simple-json-db";
-import { sensors } from "../handlers/sensodr.handler";
+import { sensors } from "../handlers/sensor.handler";
 
 type EffectTypes = 'sensor' | 'time';
 
