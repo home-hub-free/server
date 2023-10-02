@@ -6,9 +6,9 @@ export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
 export const devices: (Device | DeviceBlinds)[] = [
-  new Device('23239', 'test-device-1', 'value'),
-  new Device('12345', 'test-device-2', 'value'),
-  new Device('bool-test', 'cooling-system', 'boolean')
+  // new Device('23239', 'test-device-1', 'value'),
+  // new Device('12345', 'test-device-2', 'value'),
+  // new Device('bool-test', 'cooling-system', 'boolean')
 ];
 
 /**
