@@ -106,6 +106,7 @@ export function initDeviceRoutes(app: Express) {
       DevicesDB.set(device.id, dbStoredData);
     }
     mergeDeviceData(device, incomingData);
+    io.emit('device-update', buildClientDeviceData(device));
     response.send(true);
   });
 }

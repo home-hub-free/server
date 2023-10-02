@@ -54,6 +54,7 @@ export function initSensorRoutes(app: Express) {
     }
 
     sensor.mergeDBData();
+    io.emit('sensor-update', buildClientSensorData(sensor));
     response.send(true);
   });
 }
