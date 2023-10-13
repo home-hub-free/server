@@ -56,8 +56,12 @@ export function initDeviceRoutes(app: Express) {
 
     device
       .manualTrigger(request.body.value)
-      .then(() => {
-        response.send(buildClientDeviceData(device));
+      .then((success) => {
+        const clientData = buildClientDeviceData(device);
+        if (success) {
+          DevicesDB.set(device.id, clientData);
+        }
+        response.send(clientData);
       })
       .catch(() => {
         response.send(false);
@@ -96,17 +100,10 @@ export function initDeviceRoutes(app: Express) {
     if (!request.body.data) return response.send(false);
 
     let incomingData = request.body.data;
-    let dbStoredData = DevicesDB.get(device.id);
-    if (!dbStoredData) {
-      DevicesDB.set(device.id, incomingData);
-    } else {
-      Object.keys(incomingData).forEach((key: string) => {
-        dbStoredData[key] = incomingData[key];
-      });
-      DevicesDB.set(device.id, dbStoredData);
-    }
     mergeDeviceData(device, incomingData);
-    io.emit('device-update', buildClientDeviceData(device));
+    const clientData = buildClientDeviceData(device);
+    DevicesDB.set(device.id, clientData);
+    io.emit('device-update', clientData);
     response.send(true);
   });
 }

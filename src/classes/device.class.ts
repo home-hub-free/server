@@ -66,6 +66,8 @@ export class Device {
     this.deviceCategory = name as DeviceCategory;
     this.operationalRanges = operationalRanges || [];
     this.mergeDBData();
+    // When device is initialized, notify of its DB value 
+    this.notifyDevice(this.value);
   }
 
   /**
@@ -98,7 +100,7 @@ export class Device {
   notifyDevice(value: any): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.ip) {
-        log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
+        log(EVENT_TYPES.error, [`Unable to update Device without IP address: ${this.name}`]);
         resolve(false);
         return;
       }
