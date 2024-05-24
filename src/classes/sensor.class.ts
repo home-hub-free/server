@@ -173,11 +173,6 @@ export class Sensor {
     }
   }
 
-  private getSensorTemp(): number {
-    if (this.sensorType !== 'temp/humidity') return null;
-    return parseFloat(this.value.split(':')[0]);
-  }
-
   private setBooleanSensorEffect(effect: any) {
     let prop = !effect.when.is || effect.when.is === 'false' ? 'off' : 'on';
     this.effects[prop].push(() => {
@@ -190,22 +185,29 @@ export class Sensor {
 
   private setTempHumidityEffect(effect: any) {  
     this.effects.value.push(() => {
-      let target = effect.when.is.split(':');
-      let comparassion = target[0];
-      let requiredTemperature = parseFloat(target[1]);
-      let humidity = parseFloat(target[2]);
+      const [valueToCheck, comparassion, targetValue] = effect.when.is.split(':');
 
       let device = devices.find(device => device.id === effect.set.id);
-      let sensorTemp = this.getSensorTemp();
-      let reachesDesiredValue = false;
-
-      if (comparassion === 'higher-than') {
-        reachesDesiredValue = sensorTemp > requiredTemperature;
-      } else if (comparassion === 'lower-than') {
-        reachesDesiredValue = sensorTemp < requiredTemperature;
+      let [temperature, humidity] = this.value.split(':');
+      let sensorValue = null;
+      switch (valueToCheck) {
+        case 'temp':
+          sensorValue = temperature;
+          break;
+        case 'humidity':
+          sensorValue = humidity;
       }
 
-      if (device && reachesDesiredValue && device.value !== effect.set.value) {
+      let triggerEffect = false;
+      switch (comparassion) {
+        case 'higher-than':
+          triggerEffect = sensorValue > targetValue;
+          break;
+        case 'lower-than':
+          triggerEffect = sensorValue < targetValue;
+      }
+
+      if (device && triggerEffect && device.value !== effect.set.value) {
         device.autoTrigger(effect.set.value);
       }
     });

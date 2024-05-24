@@ -71,7 +71,7 @@ class VAssistant {
   }
 
   /**
-   * Handles the creating of the speech and queue (if necessary) for emma's voice
+   * Handles the creating of the speech and queue (if necessary) for v-assistant's voice
    * @param text Text that will be read out-loud
    * @param force Force speech ignoring allowedSpeakTimeRanges validations
    */
