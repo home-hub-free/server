@@ -179,8 +179,10 @@ export class Sensor {
     this.effects[prop].push(() => {
       let device = devices.find(device => device.id === effect.set.id);
       if (device && device.value !== effect.set.value) {
-        const newValue = this.getNewValueFromEffect(effect, device);
-        device.autoTrigger(newValue);
+        const { hasChanges, newValue } = this.getNewValueFromEffect(effect, device);
+        if (hasChanges) {
+          device.autoTrigger(newValue);
+        }
       }
     });
   }
