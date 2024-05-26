@@ -1,6 +1,6 @@
 
 import { Express } from "express";
-import { Device, DeviceBlinds, DeviceTypesToDataTypes } from "../classes/device.class";
+import { Device, DeviceBlinds, DeviceTypesToDataTypes, PRECISION_DEVICES } from "../classes/device.class";
 import {
   devices,
   assignDeviceIpAddress,
@@ -25,7 +25,7 @@ export function initDeviceRoutes(app: Express) {
 
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
-    let { id, name } = request.body;
+    let { id, name, firstPing } = request.body;
 
     let device = devices.find((device) => device.id === id);
     if (!device) {
@@ -44,6 +44,14 @@ export function initDeviceRoutes(app: Express) {
       device.lastPing = new Date();
     }
     assignDeviceIpAddress(id, request.ip);
+    /**
+     * Device could have been reseted turned off for whatever reason
+     * if its the first ping, make sure to update ONLY if its not a
+     * precision device, (avoid breaking stuff) 
+     */
+    if (firstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
+      device.notifyDevice(device.value);
+    }
 
     response.send(true);
   });

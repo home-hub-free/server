@@ -25,12 +25,12 @@ setInterval(() => {
   for (let i = devices.length - 1; i >= 0; i--) {
     const device = devices[i];
     const offlineTime = now.getTime() - device.lastPing.getTime();
-    if (offlineTime > 60 * 1000) devices.splice(i, 1)
+    if (offlineTime > 30 * 1000) devices.splice(i, 1)
   }
   for (let i = sensors.length - 1; i >= 0; i--) {
     const sensor = sensors[i];
     const offlineTime = now.getTime() - sensor.lastPing.getTime();
-    if (offlineTime > 60 * 1000) sensors.splice(i, 1)
+    if (offlineTime > 30 * 1000) sensors.splice(i, 1)
   }
 }, 60 * 1000);
 

@@ -7,7 +7,17 @@ import { deepEqual } from "assert";
 
 type DeviceType = 'boolean' | 'value';
 
-type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blinds' | 'camera'
+export type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blinds' | 'camera'
+
+/**
+ * Presision devices measure their values themselves, since they should be
+ * connected to either a sensor/rotation-encoder to work as expected, their
+ * values should be the source of truth for the server, to avoid
+ * unnecessary mechanical miss-alignments and or break stuff
+ */
+export const PRECISION_DEVICES: [DeviceCategory] = [
+  'blinds'
+]
 
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
@@ -77,8 +87,12 @@ export class Device {
       this.ip = pullIpFromAddress(ip);
     }
     this.mergeDBData();
+
+    // TODO: Legacy implementation, remove once all devices have "firstPing" implemented
     // When device is initialized, notify of its DB value 
-    this.notifyDevice(this.value);
+    if (!PRECISION_DEVICES.includes(this.deviceCategory)) {
+      this.notifyDevice(this.value);
+    }
   }
 
   /**
