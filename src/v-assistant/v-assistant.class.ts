@@ -116,7 +116,7 @@ class VAssistant {
 
   toggleCoolingDevices(value: boolean) {
     let toggledDevices = 0;
-    let coolingDevices = devices.filter((device) => device.deviceCategory === 'cooling-system');
+    let coolingDevices = devices.filter((device) => device.deviceCategory === 'evap-cooler');
     coolingDevices.forEach((device) => {
       let currentValue = device.value;
       device.autoTrigger(value);
