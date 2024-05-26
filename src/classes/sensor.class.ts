@@ -186,7 +186,7 @@ export class Sensor {
   }
 
   private setTempHumidityEffect(effect: any) {  
-    this.effects.value.push(() => {
+    this.effects.value.push(async () => {
       const [valueToCheck, comparassion, targetValue] = effect.when.is.split(':');
 
       let device = devices.find(device => device.id === effect.set.id);
@@ -210,26 +210,30 @@ export class Sensor {
       }
 
       // This will always be true for multi value devices, but thats okay
-      const hasChanges = device.value !== effect.set.value;
-      if (device && triggerEffect && hasChanges) {
-        const newValue = this.getNewValueFromEffect(effect, device);
-        device.autoTrigger(newValue);
+      if (device && triggerEffect) {
+        const { hasChanges, newValue } = this.getNewValueFromEffect(effect, device);
+        if (hasChanges) {
+          device.autoTrigger(newValue);
+        }
       }
     });
   }
 
   private getNewValueFromEffect(effect: any, device: Device) {
     let newValue = null;
+    let hasChanges = false;
     const valueToSet = effect.set.valueToSet;
     if (valueToSet) {
       newValue = {
         ...device.value,
         [valueToSet]: effect.set.value,
       }
+      hasChanges = device.value[valueToSet] != effect.set.value;
     } else {
       newValue = effect.set.value;
+      hasChanges = device.value !== effect.set.value
     }
 
-    return newValue;
+    return { hasChanges, newValue};
   }
 }

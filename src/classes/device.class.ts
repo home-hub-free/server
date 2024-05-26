@@ -100,9 +100,9 @@ export class Device {
    * function will check for device trigger conditions before actually triggering
    * the device
    */
-  autoTrigger(value: any) {
+  async autoTrigger(value: any) {
     if (this.canAutoTrigger() && this.hasChanges(value)) {
-      this.notifyDevice(value);
+      return this.notifyDevice(value);
     }
   }
 
