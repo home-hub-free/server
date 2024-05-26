@@ -1,16 +1,17 @@
 import axios from "axios";
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/daily-events.handler";
-import { buildClientDeviceData, DevicesDB } from "../handlers/device.handler";
+import { buildClientDeviceData, DevicesDB, pullIpFromAddress } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
+import { deepEqual } from "assert";
 
 type DeviceType = 'boolean' | 'value';
 
-type DeviceCategory = 'light' | 'cooling-system' | 'dimmable-light' | 'blinds' | 'camera'
+type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blinds' | 'camera'
 
 export const DeviceTypesToDataTypes = {
   'light': 'boolean',
-  'cooling-system': 'boolean',
+  'evap-cooler': 'value',
   'dimmable-light': 'value',
   'blinds': 'value'
 };
@@ -49,7 +50,7 @@ export class Device {
   public operationalRanges: string[];
   private _timer: NodeJS.Timeout;
 
-  constructor(id: string, name: string, type: DeviceType, operationalRanges?: string[]) {
+  constructor(id: string, name: string, type: DeviceType, operationalRanges?: string[], ip?: string) {
     switch (type) {
       case 'boolean':
         this.value = false;
@@ -59,12 +60,22 @@ export class Device {
         break;
     }
 
+    if (name === 'evap-cooler') {
+      this.value = {
+        fan: false,
+        water: false,
+      };
+    }
+
     this.id = id;
     this.name = name;
     this.type = type;
     // When constructed the name original name is the device category
     this.deviceCategory = name as DeviceCategory;
     this.operationalRanges = operationalRanges || [];
+    if (ip) {
+      this.ip = pullIpFromAddress(ip);
+    }
     this.mergeDBData();
     // When device is initialized, notify of its DB value 
     this.notifyDevice(this.value);
@@ -76,7 +87,7 @@ export class Device {
    * the device
    */
   autoTrigger(value: any) {
-    if (this.canAutoTrigger() && String(value) !== String(this.value)) {
+    if (this.canAutoTrigger() && this.hasChanges(value)) {
       this.notifyDevice(value);
     }
   }
@@ -104,7 +115,7 @@ export class Device {
         resolve(false);
         return;
       }
-      axios.get(`http://${this.ip}/set?value=${value}`).then(() => {
+      axios.get(this.getDeviceUpdateRequestURL(value)).then(() => {
         this.value = value;
         io.emit("device-update", buildClientDeviceData(this));
         log(EVENT_TYPES.device_triggered, [`Device triggered ${this.name}, ${this.value}`]);
@@ -192,8 +203,27 @@ export class Device {
     const dbStoredData = DevicesDB.get(this.id);
     if (dbStoredData) {
       Object.keys(dbStoredData).forEach((key: string) => {
-        if (this[key]) this[key] = dbStoredData[key];
+        if (this[key] !== null && dbStoredData[key] !== null) this[key] = dbStoredData[key];
       });
+    }
+  }
+
+  private getDeviceUpdateRequestURL(value: any) {
+    const url = `http://${this.ip}`;
+    switch (this.deviceCategory) {
+      case 'evap-cooler':
+        return `${url}/set?fan=${value.fan}&water=${value.water}`;
+      default:
+        return `${url}/set?value=${value}`
+    }
+  }
+
+  private hasChanges(newValue: any): boolean {
+    switch (this.deviceCategory) {
+      case 'evap-cooler':
+        return true;
+      default:
+        return String(newValue) !== String(this.value)
     }
   }
 }

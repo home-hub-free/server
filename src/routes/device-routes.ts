@@ -1,3 +1,4 @@
+
 import { Express } from "express";
 import { Device, DeviceBlinds, DeviceTypesToDataTypes } from "../classes/device.class";
 import {
@@ -36,7 +37,7 @@ export function initDeviceRoutes(app: Express) {
         default:
           DeviceClass = Device;
       }
-      device = new DeviceClass(id, name, DeviceTypesToDataTypes[name]);
+      device = new DeviceClass(id, name, DeviceTypesToDataTypes[name], null, request.ip);
       devices.push(device);
       io.emit("device-declare", buildClientDeviceData(device));
     } else {

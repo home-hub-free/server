@@ -3,6 +3,7 @@ import { SensorsDB } from '../handlers/sensor.handler';
 import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
+import { Device } from './device.class';
 
 const TIME_TO_INACTIVE = 60 * 1000 * 2;
 
@@ -178,7 +179,8 @@ export class Sensor {
     this.effects[prop].push(() => {
       let device = devices.find(device => device.id === effect.set.id);
       if (device && device.value !== effect.set.value) {
-        device.autoTrigger(effect.set.value);
+        const newValue = this.getNewValueFromEffect(effect, device);
+        device.autoTrigger(newValue);
       }
     });
   }
@@ -207,9 +209,27 @@ export class Sensor {
           triggerEffect = sensorValue < targetValue;
       }
 
-      if (device && triggerEffect && device.value !== effect.set.value) {
-        device.autoTrigger(effect.set.value);
+      // This will always be true for multi value devices, but thats okay
+      const hasChanges = device.value !== effect.set.value;
+      if (device && triggerEffect && hasChanges) {
+        const newValue = this.getNewValueFromEffect(effect, device);
+        device.autoTrigger(newValue);
       }
     });
+  }
+
+  private getNewValueFromEffect(effect: any, device: Device) {
+    let newValue = null;
+    const valueToSet = effect.set.valueToSet;
+    if (valueToSet) {
+      newValue = {
+        ...device.value,
+        [valueToSet]: effect.set.value,
+      }
+    } else {
+      newValue = effect.set.value;
+    }
+
+    return newValue;
   }
 }

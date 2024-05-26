@@ -1,6 +1,8 @@
 import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
 import JSONdb from "simple-json-db";
+import { Request } from "express";
+// import { Request } from "aws-sdk";
 // import { createStorageStream } from "./camera-storage-handler";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
@@ -8,7 +10,7 @@ export const DevicesDB = new JSONdb('db/devices.db.json');
 export const devices: (Device | DeviceBlinds)[] = [
   // new Device('23239', 'test-device-1', 'value'),
   // new Device('12345', 'test-device-2', 'value'),
-  // new Device('bool-test', 'cooling-system', 'boolean')
+  // new Device('bool-test', 'evap-cooler', 'value')
 ];
 
 /**
@@ -19,8 +21,7 @@ export const devices: (Device | DeviceBlinds)[] = [
  */
 export function assignDeviceIpAddress(deviceId: string, address: string) {
   let device = devices.find((device) => device.id == deviceId);
-  let chunks = address.split(":");
-  let ip = chunks[chunks.length - 1];
+  const ip = pullIpFromAddress(address);
   if (device && !device.ip) {
     device.ip = ip;
     log(EVENT_TYPES.device_detected, [deviceId, device.name, ip]);
@@ -34,6 +35,12 @@ export function assignDeviceIpAddress(deviceId: string, address: string) {
   // if (device.deviceCategory === 'camera') {
   //   createStorageStream(device);
   // }
+}
+
+export function pullIpFromAddress(address: Request['ip']) {
+  let chunks = address.split(":");
+  let ip = chunks[chunks.length - 1];
+  return ip;
 }
 
 export function getDevices(): DeviceData[] {
