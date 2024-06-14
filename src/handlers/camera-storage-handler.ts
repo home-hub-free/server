@@ -1,99 +1,32 @@
-// import { Device } from "../classes/device.class";
-// import dgram from 'dgram';
-// import fs from 'fs';
-// import path from 'path';
-// import videoshow from 'videoshow';
-// const streams: { [key: string]: dgram.Socket } = {};
-// const images: { [key: string]: (string | Buffer)[] } = {};
+import { Device } from "../classes/device.class";
+import { Server } from "socket.io";
+import { CameraConnection } from "../classes/camera.class";
 
-// export function createStorageStream(camera: Device) {
-//   if (camera.deviceCategory != 'camera') return;
+const connections: { [key: string]: CameraConnection } = {}; 
 
-//   if (!streams[camera.ip]) {
-//     const client = getClient();
-//     validateCameraStoragePath(camera);
-//     let buffer: Buffer = Buffer.from('');
-//     images[camera.ip] = [];
-  
-//     client.on('message', (msg) => {
-//       const utf = msg.toString('utf-8'); 
+const cameraWSServer = new Server({
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
-//       switch (utf) {
-//         case 'start':
-//           buffer = Buffer.from('');
-//           break;
-//         case 'end':
-//           const filePath = path.resolve(
-//             'storage',
-//             camera.id,
-//             'pictures',
-//             `frame-${images[camera.ip].length}.jpg`
-//           );
-//           fs.writeFile(filePath, buffer, "binary", (err) => {});
-//           images[camera.ip].push(filePath);
+cameraWSServer.on('connect', () => {
+  console.log('connection');
+})
 
-//           if (images[camera.ip].length > 200) {
-//             joinBufferedFrames(camera);
-//             clearBufferedFrames(camera);
-//           };
-//           break;
-//         default:
-//           buffer = Buffer.concat([buffer, msg]);
-//       }
-//     });
+cameraWSServer.listen(8082);
 
-//     client.on('error', (err) => {
-//       console.error(`server error:\n${err.stack}`);
-//       client.close();
-//       delete streams[camera.ip];
-//     });
-  
-//     const data = Buffer.from('#01\r');
-//     // Initialized the stream
-//     client.send(data, 82, camera.ip);
-//     streams[camera.ip] = client;
-//   }
-// }
+export function createStorageStream(camera: Device) {
+  if (camera.deviceCategory != 'camera') return;
 
-// function getClient() {
-//   return dgram.createSocket({
-//     type: 'udp4',
-//     reuseAddr: true,
-//   });
-// }
+  // Connection already exists, return
+if (connections[camera.ip]) return;
 
-// function validateCameraStoragePath(camera: Device) {
-//   if (!fs.existsSync(path.resolve('storage', camera.id))) {
-//     fs.mkdirSync(path.resolve('storage', camera.id));
-//     fs.mkdirSync(path.resolve('storage', camera.id, 'clips'));
-//     fs.mkdirSync(path.resolve('storage', camera.id, 'pictures'));
-//   }
-// }
+  const connection = new CameraConnection(cameraWSServer, camera);
+  connection.onDisconnect = () => {
+    delete connections[camera.ip];
+  }
+  connections[camera.ip] = connection;
 
-// // Turns the buffered frames into 2 second video clips
-// function joinBufferedFrames(camera: Device) {
-//   const date = new Date();
-//   const time = date.toLocaleTimeString();
-//   const day = date.toLocaleDateString().replaceAll('/', '-');
-
-//   const dayPath = path.resolve(
-//     'storage',
-//     camera.id,
-//     'clips',
-//     day
-//   );
-//   if (!fs.existsSync(dayPath)) {
-//     fs.mkdirSync(dayPath);
-//   }
-//   videoshow(images[camera.ip], {
-//     fps: 25,
-//     loop: 0.1,
-//     format: 'mp4',
-//     transition: false,
-//   })
-//   .save(path.resolve(dayPath,`${time}.mp4`))
-// }
-
-// function clearBufferedFrames(camera: Device) {
-//   images[camera.ip] = []
-// }
+}

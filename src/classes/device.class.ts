@@ -15,8 +15,9 @@ export type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blind
  * values should be the source of truth for the server, to avoid
  * unnecessary mechanical miss-alignments and or break stuff
  */
-export const PRECISION_DEVICES: [DeviceCategory] = [
-  'blinds'
+export const PRECISION_DEVICES: Array<DeviceCategory> = [
+  'blinds',
+  'camera',
 ]
 
 export const DeviceTypesToDataTypes = {

@@ -2,8 +2,7 @@ import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
 import JSONdb from "simple-json-db";
 import { Request } from "express";
-// import { Request } from "aws-sdk";
-// import { createStorageStream } from "./camera-storage-handler";
+import { createStorageStream } from "./camera-storage-handler";
 export const DevicesDB = new JSONdb('db/devices.db.json');
 
 // These get populated as devices join the local network
@@ -32,9 +31,9 @@ export function assignDeviceIpAddress(deviceId: string, address: string) {
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
 
-  // if (device.deviceCategory === 'camera') {
-  //   createStorageStream(device);
-  // }
+  if (device.deviceCategory === 'camera') {
+    createStorageStream(device);
+  }
 }
 
 export function pullIpFromAddress(address: Request['ip']) {
@@ -62,6 +61,5 @@ export function buildClientDeviceData(device: Device): DeviceData {
     deviceCategory: device.deviceCategory,
     manual: device.manual,
     operationalRanges: device.operationalRanges,
-    ip: device.deviceCategory === 'camera' ? device.ip : null,
   };
 }
