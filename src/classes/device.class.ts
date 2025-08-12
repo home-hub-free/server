@@ -1,13 +1,21 @@
 import axios from "axios";
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/daily-events.handler";
-import { buildClientDeviceData, DevicesDB, pullIpFromAddress } from "../handlers/device.handler";
+import {
+  buildClientDeviceData,
+  DevicesDB,
+  pullIpFromAddress,
+} from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
-import { deepEqual } from "assert";
 
-type DeviceType = 'boolean' | 'value';
+type DeviceType = "boolean" | "value";
 
-export type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blinds' | 'camera'
+export type DeviceCategory =
+  | "light"
+  | "evap-cooler"
+  | "dimmable-light"
+  | "blinds"
+  | "camera";
 
 /**
  * Presision devices measure their values themselves, since they should be
@@ -15,31 +23,28 @@ export type DeviceCategory = 'light' | 'evap-cooler' | 'dimmable-light' | 'blind
  * values should be the source of truth for the server, to avoid
  * unnecessary mechanical miss-alignments and or break stuff
  */
-export const PRECISION_DEVICES: Array<DeviceCategory> = [
-  'blinds',
-  'camera',
-]
+export const PRECISION_DEVICES: Array<DeviceCategory> = ["blinds", "camera"];
 
 export const DeviceTypesToDataTypes = {
-  'light': 'boolean',
-  'evap-cooler': 'value',
-  'dimmable-light': 'value',
-  'blinds': 'value'
+  light: "boolean",
+  "evap-cooler": "value",
+  "dimmable-light": "value",
+  blinds: "value",
 };
 
 export interface DeviceData {
-  id: string,
-  name: string,
-  value: any,
-  type: DeviceType,
+  id: string;
+  name: string;
+  value: any;
+  type: DeviceType;
   deviceCategory: string;
-  manual: boolean,
-  operationalRanges: string[]
-  ip?: string
-};
+  manual: boolean;
+  operationalRanges: string[];
+  ip?: string;
+}
 
 export type DeviceList = Device[];
-export type DeviceMap = { [key: string]: Device } | {}
+export type DeviceMap = { [key: string]: Device } | {};
 
 export class Device {
   public ip: string | null = null;
@@ -61,20 +66,28 @@ export class Device {
   public operationalRanges: string[];
   private _timer: NodeJS.Timeout;
 
-  constructor(id: string, name: string, type: DeviceType, operationalRanges?: string[], ip?: string) {
+  constructor(
+    id: string,
+    name: string,
+    type: DeviceType,
+    operationalRanges?: string[],
+    ip?: string,
+  ) {
     switch (type) {
-      case 'boolean':
+      case "boolean":
         this.value = false;
         break;
-      case 'value':
+      case "value":
         this.value = 0;
         break;
     }
 
-    if (name === 'evap-cooler') {
+    if (name === "evap-cooler") {
       this.value = {
         fan: false,
         water: false,
+        ["unit-temp"]: 0,
+        ["room-temp"]: 0,
       };
     }
 
@@ -90,7 +103,7 @@ export class Device {
     this.mergeDBData();
 
     // TODO: Legacy implementation, remove once all devices have "firstPing" implemented
-    // When device is initialized, notify of its DB value 
+    // When device is initialized, notify of its DB value
     if (!PRECISION_DEVICES.includes(this.deviceCategory)) {
       this.notifyDevice(this.value);
     }
@@ -116,9 +129,9 @@ export class Device {
     this.manual = true;
     return this.notifyDevice(value).then((success) => {
       if (this._timer) {
-        clearTimeout(this._timer)
+        clearTimeout(this._timer);
         this._timer = null;
-      };
+      }
       return success;
     });
   }
@@ -126,19 +139,28 @@ export class Device {
   notifyDevice(value: any): Promise<boolean> {
     return new Promise((resolve, reject) => {
       if (!this.ip) {
-        log(EVENT_TYPES.error, [`Unable to update Device without IP address: ${this.name}`]);
+        log(EVENT_TYPES.error, [
+          `Unable to update Device without IP address: ${this.name}`,
+        ]);
         resolve(false);
         return;
       }
-      axios.get(this.getDeviceUpdateRequestURL(value)).then(() => {
-        this.value = value;
-        io.emit("device-update", buildClientDeviceData(this));
-        log(EVENT_TYPES.device_triggered, [`Device triggered ${this.name}, ${this.value}`]);
-        resolve(true);
-      }).catch((reason) => {
-        log(EVENT_TYPES.error, [`Device not found 404, ${this.name}, ${reason}`]);
-        reject(false);
-      });
+      axios
+        .get(this.getDeviceUpdateRequestURL(value))
+        .then(() => {
+          this.value = value;
+          io.emit("device-update", buildClientDeviceData(this));
+          log(EVENT_TYPES.device_triggered, [
+            `Device triggered ${this.name}, ${this.value}`,
+          ]);
+          resolve(true);
+        })
+        .catch((reason) => {
+          log(EVENT_TYPES.error, [
+            `Device not found 404, ${this.name}, ${reason}`,
+          ]);
+          reject(false);
+        });
     });
   }
 
@@ -146,7 +168,7 @@ export class Device {
     if (this.manual) {
       return false;
     }
-    
+
     // We allow autotrigger if there is a pending timmer to execute since timerTriggers
     // can only be initialized when trigger conditions pass, this is to allow devices
     // to trigger their timers if they where initialized during operational range and
@@ -166,7 +188,7 @@ export class Device {
     let now = new Date().getTime();
     // [HH:MM-HH:MM] (24h based)
     this.operationalRanges.forEach((range) => {
-      let ranges = range.split('-');
+      let ranges = range.split("-");
       let start = this.parseRange(ranges[0]);
       let end = this.parseRange(ranges[1]);
 
@@ -184,11 +206,13 @@ export class Device {
     let sunset = dailyEvents.sunset;
 
     switch (value) {
-      case 'sunrise':
-        timestamp = sunrise.time && sunrise.time.getTime() || new Date().getTime();
+      case "sunrise":
+        timestamp =
+          (sunrise.time && sunrise.time.getTime()) || new Date().getTime();
         break;
-      case 'sunset':
-        timestamp = sunset.time && sunset.time.getTime() || new Date().getTime();
+      case "sunset":
+        timestamp =
+          (sunset.time && sunset.time.getTime()) || new Date().getTime();
         break;
       default:
         timestamp = this.parseTimeValue(value).getTime();
@@ -199,7 +223,7 @@ export class Device {
 
   private parseTimeValue(timeValue: string): Date {
     let now = new Date();
-    let splitTime = timeValue.split(':');
+    let splitTime = timeValue.split(":");
     let hours = parseInt(splitTime[0]);
     let minutes = 0;
 
@@ -210,7 +234,7 @@ export class Device {
     now.setHours(hours);
     now.setMinutes(minutes);
     now.setSeconds(0);
-    
+
     return now;
   }
 
@@ -218,7 +242,8 @@ export class Device {
     const dbStoredData = DevicesDB.get(this.id);
     if (dbStoredData) {
       Object.keys(dbStoredData).forEach((key: string) => {
-        if (this[key] !== null && dbStoredData[key] !== null) this[key] = dbStoredData[key];
+        if (this[key] !== null && dbStoredData[key] !== null)
+          this[key] = dbStoredData[key];
       });
     }
   }
@@ -226,19 +251,19 @@ export class Device {
   private getDeviceUpdateRequestURL(value: any) {
     const url = `http://${this.ip}`;
     switch (this.deviceCategory) {
-      case 'evap-cooler':
+      case "evap-cooler":
         return `${url}/set?fan=${value.fan}&water=${value.water}`;
       default:
-        return `${url}/set?value=${value}`
+        return `${url}/set?value=${value}`;
     }
   }
 
   private hasChanges(newValue: any): boolean {
     switch (this.deviceCategory) {
-      case 'evap-cooler':
+      case "evap-cooler":
         return true;
       default:
-        return String(newValue) !== String(this.value)
+        return String(newValue) !== String(this.value);
     }
   }
 }
@@ -250,7 +275,9 @@ export class DeviceBlinds extends Device {
         log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
       }
       axios.get(`http://${this.ip}/spin`).then(() => {
-        log(EVENT_TYPES.device_triggered, [`Blinds spinned, ${this.name}, ${this.value}`]);
+        log(EVENT_TYPES.device_triggered, [
+          `Blinds spinned, ${this.name}, ${this.value}`,
+        ]);
         resolve(true);
       });
     });
@@ -274,7 +301,9 @@ export class DeviceBlinds extends Device {
         log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
       }
       axios.get(`http://${this.ip}/set-limit`).then(() => {
-        log(EVENT_TYPES.device_triggered, [`Blinds Limit Set, ${this.name}, ${this.value}`]);
+        log(EVENT_TYPES.device_triggered, [
+          `Blinds Limit Set, ${this.name}, ${this.value}`,
+        ]);
         resolve(true);
       });
     });
@@ -286,7 +315,9 @@ export class DeviceBlinds extends Device {
         log(EVENT_TYPES.error, [`Device without IP address: ${this.name}`]);
       }
       axios.get(`http://${this.ip}/switch-direction`).then(() => {
-        log(EVENT_TYPES.device_triggered, [`Blinds Switch directio, ${this.name}, ${this.value}`]);
+        log(EVENT_TYPES.device_triggered, [
+          `Blinds Switch directio, ${this.name}, ${this.value}`,
+        ]);
         resolve(true);
       });
     });

@@ -52,6 +52,12 @@ export function mergeDeviceData(device: Device, data: any) {
   });
 }
 
+export function mergeDeviceValue(device: Device, value: any) {
+  Object.keys(value).forEach((key: string) => {
+    device.value[key] = value[key];
+  });
+}
+
 export function buildClientDeviceData(device: Device): DeviceData {
   return {
     id: device.id,

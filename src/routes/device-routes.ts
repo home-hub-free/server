@@ -1,6 +1,10 @@
-
 import { Express } from "express";
-import { Device, DeviceBlinds, DeviceTypesToDataTypes, PRECISION_DEVICES } from "../classes/device.class";
+import {
+  Device,
+  DeviceBlinds,
+  DeviceTypesToDataTypes,
+  PRECISION_DEVICES,
+} from "../classes/device.class";
 import {
   devices,
   assignDeviceIpAddress,
@@ -8,6 +12,7 @@ import {
   buildClientDeviceData,
   DevicesDB,
   mergeDeviceData,
+  mergeDeviceValue,
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
 
@@ -31,13 +36,19 @@ export function initDeviceRoutes(app: Express) {
     if (!device) {
       let DeviceClass = Device;
       switch (name) {
-        case 'blinds':
+        case "blinds":
           DeviceClass = DeviceBlinds;
           break;
         default:
           DeviceClass = Device;
       }
-      device = new DeviceClass(id, name, DeviceTypesToDataTypes[name], null, request.ip);
+      device = new DeviceClass(
+        id,
+        name,
+        DeviceTypesToDataTypes[name],
+        null,
+        request.ip,
+      );
       devices.push(device);
       io.emit("device-declare", buildClientDeviceData(device));
     } else {
@@ -47,7 +58,7 @@ export function initDeviceRoutes(app: Express) {
     /**
      * Device could have been reseted turned off for whatever reason
      * if its the first ping, make sure to update ONLY if its not a
-     * precision device, (avoid breaking stuff) 
+     * precision device, (avoid breaking stuff)
      */
     if (firstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
       device.notifyDevice(device.value);
@@ -79,21 +90,23 @@ export function initDeviceRoutes(app: Express) {
 
   app.post("/device-blinds-configure", (request, response) => {
     const { id, action } = request.body;
-    let device: DeviceBlinds = devices.find((device) => device.id === id) as DeviceBlinds;
+    let device: DeviceBlinds = devices.find(
+      (device) => device.id === id,
+    ) as DeviceBlinds;
     let result = false;
     if (device) {
       result = true;
       switch (action) {
-        case 'spin':
+        case "spin":
           device.spin();
           break;
-        case 'switch-direction':
+        case "switch-direction":
           device.switchDirection();
           break;
-        case 'home-position':
+        case "home-position":
           device.setHomeValue();
           break;
-        case 'set-limit':
+        case "set-limit":
           device.setLimitValue();
           break;
       }
@@ -112,7 +125,20 @@ export function initDeviceRoutes(app: Express) {
     mergeDeviceData(device, incomingData);
     const clientData = buildClientDeviceData(device);
     DevicesDB.set(device.id, clientData);
-    io.emit('device-update', clientData);
+    io.emit("device-update", clientData);
+    response.send(true);
+  });
+
+  // Used to update device value data, different from "device-data-set", in
+  // which this endpoint updates read-only data from the device, not DB data
+  app.post("/device-value-set", (request, response) => {
+    const { id, value } = request.body;
+    let device = devices.find((device) => device.id === id);
+    mergeDeviceValue(device, value);
+    console.log(device.value);
+    const clientData = buildClientDeviceData(device);
+    DevicesDB.set(device.id, clientData);
+    io.emit("device-update", clientData);
     response.send(true);
   });
 }
