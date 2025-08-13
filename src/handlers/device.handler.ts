@@ -85,7 +85,7 @@ export function applyEvapCoolerEffects(device: Device) {
   // the day, since if this is turned on in the middle of a hot day, it will
   // likely just turn both water pump and fan on
   const controlTempBelowTarget = unitTemp < target;
-  const waterPumpState = roomTemp < target - 0.4 && !controlTempBelowTarget;
+  const waterPumpState = roomTemp > target - 0.4 && !controlTempBelowTarget;
   const fanState = roomTemp > target + 0.4;
 
   if (current.water !== waterPumpState) updates.water = waterPumpState;
