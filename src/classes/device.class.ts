@@ -155,8 +155,9 @@ export class Device {
         .then(() => {
           this.value = value;
           io.emit("device-update", buildClientDeviceData(this));
+
           log(EVENT_TYPES.device_triggered, [
-            `Device triggered ${this.name}, ${this.value}`,
+            `Device triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`,
           ]);
           resolve(true);
         })
