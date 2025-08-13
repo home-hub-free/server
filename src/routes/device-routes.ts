@@ -56,6 +56,7 @@ export function initDeviceRoutes(app: Express) {
       device.lastPing = new Date();
     }
     assignDeviceIpAddress(id, request.ip);
+
     /**
      * Device could have been reseted turned off for whatever reason
      * if its the first ping, make sure to update ONLY if its not a
@@ -63,6 +64,7 @@ export function initDeviceRoutes(app: Express) {
      */
     if (firstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
       device.notifyDevice(device.value);
+      console.log("Notified trough declare", device);
     }
 
     response.send(true);
