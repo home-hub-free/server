@@ -13,6 +13,7 @@ import {
   DevicesDB,
   mergeDeviceData,
   mergeDeviceValue,
+  checkDeviceEffects,
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
 
@@ -130,12 +131,22 @@ export function initDeviceRoutes(app: Express) {
   });
 
   // Used to update device value data, different from "device-data-set", in
-  // which this endpoint updates read-only data from the device, not DB data
+  // which this endpoint updates read-only data from the device, and this data
+  // can be used to run self-automations
   app.post("/device-value-set", (request, response) => {
     const { id, value } = request.body;
     let device = devices.find((device) => device.id === id);
     mergeDeviceValue(device, value);
-    console.log(device.value);
+
+    // Check if any of the updates values triggers
+    // an device effect
+    const updates = checkDeviceEffects(device);
+    if (updates) {
+      mergeDeviceValue(device, updates);
+      device.autoTrigger(device.value);
+    }
+
+    // Update device data after checking if there where updates
     const clientData = buildClientDeviceData(device);
     DevicesDB.set(device.id, clientData);
     io.emit("device-update", clientData);

@@ -3,7 +3,7 @@ import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
 import JSONdb from "simple-json-db";
 import { Request } from "express";
 import { createStorageStream } from "./camera-storage-handler";
-export const DevicesDB = new JSONdb('db/devices.db.json');
+export const DevicesDB = new JSONdb("db/devices.db.json");
 
 // These get populated as devices join the local network
 export const devices: (Device | DeviceBlinds)[] = [
@@ -31,12 +31,12 @@ export function assignDeviceIpAddress(deviceId: string, address: string) {
     log(EVENT_TYPES.device_new_ip, [deviceId, ip]);
   }
 
-  if (device.deviceCategory === 'camera') {
+  if (device.deviceCategory === "camera") {
     createStorageStream(device);
   }
 }
 
-export function pullIpFromAddress(address: Request['ip']) {
+export function pullIpFromAddress(address: Request["ip"]) {
   let chunks = address.split(":");
   let ip = chunks[chunks.length - 1];
   return ip;
@@ -56,6 +56,42 @@ export function mergeDeviceValue(device: Device, value: any) {
   Object.keys(value).forEach((key: string) => {
     device.value[key] = value[key];
   });
+}
+
+// Devices can have their own effects based on their own sensors
+export function checkDeviceEffects(device: Device) {
+  switch (device.deviceCategory) {
+    case "evap-cooler":
+      return applyEvapCoolerEffects(device);
+  }
+}
+
+export function applyEvapCoolerEffects(device: Device) {
+  const current = device.value;
+  const target = current.target;
+
+  // Sensor used inside the room
+  const roomTemp = current["room-temp"];
+
+  // Sensor used wherever else, usually inside the cooler (to know output temp), or
+  // outside near the cooler (temp of pulled air), whatever is more convinient
+  // to know
+  const unitTemp = current["unit-temp"];
+
+  const updates: any = {};
+
+  // Turn on water pump half degree sooner, to allow pads to
+  // soak, this will only apply when naturally reaching temperature trough-out
+  // the day, since if this is turned on in the middle of a hot day, it will
+  // likely just turn both water pump and fan on
+  const controlTempBelowTarget = unitTemp < target;
+  const waterPumpState = roomTemp < target - 0.4 && !controlTempBelowTarget;
+  const fanState = roomTemp > target + 0.4;
+
+  if (current.water !== waterPumpState) updates.water = waterPumpState;
+  if (current.fan !== fanState) updates.fan = fanState;
+
+  return Object.keys(updates).length ? updates : null;
 }
 
 export function buildClientDeviceData(device: Device): DeviceData {

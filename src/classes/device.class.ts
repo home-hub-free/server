@@ -56,6 +56,11 @@ export class Device {
   public deviceCategory: DeviceCategory;
   public lastPing: Date = new Date();
   /**
+   * Some devices have their own sensors, which can trigger
+   * behavior
+   */
+  public effects = [];
+  /**
    * [HH:MM-HH:MM, HH:MM-HH:MM]
    * Possible values:
    * HH: 0-23
