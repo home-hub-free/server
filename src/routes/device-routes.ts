@@ -62,9 +62,9 @@ export function initDeviceRoutes(app: Express) {
      * if its the first ping, make sure to update ONLY if its not a
      * precision device, (avoid breaking stuff)
      */
-    if (firstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
+    const isFirstPing = firstPing === "true"; // I don't know how to serialize to bool in cpp yet :(
+    if (isFirstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
       device.notifyDevice(device.value);
-      console.log("Notified trough declare", device);
     }
 
     response.send(true);

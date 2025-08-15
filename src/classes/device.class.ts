@@ -91,6 +91,7 @@ export class Device {
       this.value = {
         fan: false,
         water: false,
+        target: 26,
         ["unit-temp"]: 0,
         ["room-temp"]: 0,
       };
