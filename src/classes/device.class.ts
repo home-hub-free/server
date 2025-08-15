@@ -171,7 +171,7 @@ export class Device {
     });
   }
 
-  private canAutoTrigger(): boolean {
+  canAutoTrigger(): boolean {
     if (this.manual) {
       return false;
     }

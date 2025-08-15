@@ -145,6 +145,7 @@ export function initDeviceRoutes(app: Express) {
     const updates = checkDeviceEffects(device);
     if (updates) {
       mergeDeviceValue(device, updates);
+      console.log("Auto triggered from value-set");
       device.autoTrigger(device.value);
     }
 

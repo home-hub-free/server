@@ -70,6 +70,8 @@ export function applyEvapCoolerEffects(device: Device) {
   const current = device.value;
   const target = current.target;
 
+  if (!device.canAutoTrigger()) return null;
+
   // Sensor used inside the room
   const roomTemp = current["room-temp"];
 
