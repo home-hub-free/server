@@ -73,24 +73,31 @@ export function applyEvapCoolerEffects(device: Device) {
   if (!device.canAutoTrigger()) return null;
 
   // Sensor used inside the room
-  const roomTemp = current["room-temp"];
+  const roomSensor = current["room-temp"];
 
   // Sensor used wherever else, usually inside the cooler (to know output temp), or
   // outside near the cooler (temp of pulled air), whatever is more convinient
   // to know
-  const unitTemp = current["unit-temp"];
+  const outsideSensor = current["unit-temp"];
   const updates: any = {};
 
   let fanState = current.fan;
   let waterPumpState = current.water;
-  if (roomTemp >= target) {
-    // Room temp is above or in target
-    fanState = roomTemp >= target - 1;
-    waterPumpState = unitTemp > target;
+
+  if (fanState) {
+    // If is currently on, turn off until room temp is at or lower than target - 1
+    fanState = roomSensor <= target - 1;
   } else {
-    // Room temp is below target
-    fanState = roomTemp >= target - 1;
-    waterPumpState = roomTemp >= target - 1 && unitTemp > target;
+    // If its currently off, turn on when room temp is at or higher than target + 1
+    fanState = roomSensor >= target + 1;
+  }
+
+  if (waterPumpState) {
+    // If currently on, turn off when room temp is at or lower than target - 2
+    waterPumpState = roomSensor <= target - 2 && outsideSensor >= target;
+  } else {
+    // If currently off, turn on when room temp is at or higher than target - 2;
+    waterPumpState = roomSensor >= target - 1 && outsideSensor >= target;
   }
 
   if (current.water !== waterPumpState) updates.water = waterPumpState;
