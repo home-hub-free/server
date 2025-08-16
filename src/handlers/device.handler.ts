@@ -85,16 +85,16 @@ export function applyEvapCoolerEffects(device: Device) {
   let waterPumpState = current.water;
 
   if (fanState) {
-    // If is currently on, turn off until room temp is at or lower than target - 1
+    // If currently on, stay on while room temperature is higher than target - 1
     fanState = roomSensor >= target - 1;
   } else {
-    // If its currently off, turn on when room temp is at or higher than target + 1
+    // If currently off, turn on when room temperature is higher or equal than target + 1
     fanState = roomSensor >= target + 1;
   }
 
   if (waterPumpState) {
     // If currently on, turn off when room temp is at or lower than target - 2
-    waterPumpState = roomSensor >= target - 2 && outsideSensor >= target;
+    waterPumpState = roomSensor >= target - 1 && outsideSensor >= target;
   } else {
     // If currently off, turn on when room temp is at or higher than target - 2;
     waterPumpState = roomSensor >= target && outsideSensor >= target;

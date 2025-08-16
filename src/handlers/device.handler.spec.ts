@@ -1,25 +1,10 @@
 import { Device } from "../classes/device.class";
 import { applyEvapCoolerEffects } from "./device.handler";
 
-jest.mock("../handlers/daily-events.handler", () => ({
-  dailyEvents: {
-    sunset: { time: new Date() },
-    sunrise: { time: new Date() },
-  },
-}));
-// dailyEvents.sunrise.time.setHours(6);
-// dailyEvents.sunset.time.setHours(19);
-
 describe("Validate device effects", () => {
   let device: Device;
   beforeEach(() => {
-    device = new Device(
-      "id-123",
-      "evap-cooler",
-      "value",
-      [],
-      "123.123.123.123",
-    );
+    device = new Device("id-123", "evap-cooler", "value", []);
     device.value = {
       fan: false,
       water: false,
@@ -27,6 +12,8 @@ describe("Validate device effects", () => {
       ["room-temp"]: 25,
       ["unit-temp"]: 32,
     };
+
+    device.notifyDevice = jest.fn();
   });
 
   describe("evap-cooler fan states", () => {
@@ -43,12 +30,12 @@ describe("Validate device effects", () => {
       device.value["room-temp"] = 25;
       device.value.target = 25;
       const updates = applyEvapCoolerEffects(device);
-      expect(updates.fan).toBeFalsy();
+      expect(updates?.fan).toBeFalsy();
     });
 
-    it("set fan to false, when temperature is 1 degree lower than target, and fan is currently on", () => {
+    it("set fan to false, when temperature is 1.1 degree lower than target, and fan is currently on", () => {
       device.value.fan = true;
-      device.value["room-temp"] = 24;
+      device.value["room-temp"] = 23.9;
       device.value.target = 25;
       const updates = applyEvapCoolerEffects(device);
       expect(updates.fan).toBeFalsy();
@@ -60,6 +47,61 @@ describe("Validate device effects", () => {
       device.value.target = 25;
       const updates = applyEvapCoolerEffects(device);
       expect(updates.fan).toBeFalsy();
+    });
+  });
+
+  describe("evap-cooler water pump states", () => {
+    describe("water pump is currently off", () => {
+      it("turn on when room temperature is at target", () => {
+        device.value.water = false;
+        device.value["room-temp"] = 25;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates.water).toBeTruthy();
+      });
+
+      it("turn on when room temperature is above target", () => {
+        device.value.water = false;
+        device.value["room-temp"] = 26;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates.water).toBeTruthy();
+      });
+
+      it("stays off when room temperature is lower than target", () => {
+        device.value.water = false;
+        device.value["room-temp"] = 24;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates?.water).toBeFalsy();
+      });
+    });
+
+    describe("water pump is currently on", () => {
+      it("turn off when temperature is 1 degrees lower than target", () => {
+        device.value.water = true;
+        device.value["room-temp"] = 24;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates?.water).toBeFalsy();
+      });
+
+      it("stay on when temperature is at target", () => {
+        device.value.water = true;
+        device.value["room-temp"] = 25;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates).toBeNull(); // No updates
+      });
+
+      it("turn off when unit temp is lower or equal than target", () => {
+        device.value.water = true;
+        device.value["room-temp"] = 28;
+        device.value["unit-temp"] = 25;
+        device.value.target = 25;
+        const updates = applyEvapCoolerEffects(device);
+        expect(updates.water).toBeFalsy();
+      });
     });
   });
 });
