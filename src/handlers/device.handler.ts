@@ -85,7 +85,7 @@ export function applyEvapCoolerEffects(device: Device) {
   let waterPumpState = current.water;
   if (roomTemp >= target) {
     // Room temp is above or in target
-    fanState = roomTemp >= target + 1;
+    fanState = roomTemp >= target - 1;
     waterPumpState = unitTemp > target;
   } else {
     // Room temp is below target
