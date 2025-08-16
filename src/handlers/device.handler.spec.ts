@@ -51,6 +51,14 @@ describe("Validate device effects", () => {
     expect(updates.fan).toBeFalsy();
   });
 
+  it("Should keep fan on when temperature is a few degrees lower than target", () => {
+    device.value.fan = true;
+    device.value.target = 25;
+    device.value["room-temp"] = 24.8;
+    const updates = applyEvapCoolerEffects(device);
+    expect(updates.fan).toBeFalsy();
+  });
+
   it("Should trigger evap cooler water on when temperature is 1 degree below target", () => {
     device.value.target = 25;
     device.value["room-temp"] = 24;
@@ -69,7 +77,7 @@ describe("Validate device effects", () => {
     device.value.target = 25;
     device.value["room-temp"] = 23;
     const updates = applyEvapCoolerEffects(device);
-    expect(updates.water).toBeFalsy();
+    expect(updates).toBeFalsy();
   });
 
   it("Should turn evap cooler water off when temperature is 2 degrees below target", () => {
