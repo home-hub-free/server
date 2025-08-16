@@ -79,16 +79,19 @@ export function applyEvapCoolerEffects(device: Device) {
   // outside near the cooler (temp of pulled air), whatever is more convinient
   // to know
   const unitTemp = current["unit-temp"];
-
   const updates: any = {};
 
-  // Turn on water pump half degree sooner, to allow pads to
-  // soak, this will only apply when naturally reaching temperature trough-out
-  // the day, since if this is turned on in the middle of a hot day, it will
-  // likely just turn both water pump and fan on
-  const controlTempBelowTarget = unitTemp < target;
-  const waterPumpState = roomTemp > target - 0.4 && !controlTempBelowTarget;
-  const fanState = roomTemp > target + 0.4;
+  let fanState = current.fan;
+  let waterPumpState = current.water;
+  if (roomTemp >= target) {
+    // Room temp is above or in target
+    fanState = roomTemp >= target + 1;
+    waterPumpState = unitTemp > target;
+  } else {
+    // Room temp is below target
+    fanState = roomTemp <= target - 1;
+    waterPumpState = roomTemp >= target - 1 && unitTemp > target;
+  }
 
   if (current.water !== waterPumpState) updates.water = waterPumpState;
   if (current.fan !== fanState) updates.fan = fanState;

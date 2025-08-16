@@ -131,7 +131,7 @@ export class Device {
    * interactions. This type of trigger will be direct and have no conditions
    * attatched to it
    */
-  manualTrigger(value: any): Promise<boolean> {
+  async manualTrigger(value: any): Promise<boolean> {
     this.manual = true;
     return this.notifyDevice(value).then((success) => {
       if (this._timer) {
