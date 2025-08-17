@@ -1,11 +1,8 @@
 import { Server } from "socket.io";
 import { Device } from "./device.class";
 import dgram from "dgram";
-
-enum FEED_MESSAGE {
-  START = "start",
-  END = "end",
-}
+import { spawn } from "child_process";
+import { CameraRecorder } from "./camera.recorder";
 
 export class CameraConnection {
   feed = dgram.createSocket({
@@ -22,6 +19,8 @@ export class CameraConnection {
   buffer = Buffer.from("");
   expectedLength: number;
   receivedLength: number;
+
+  recorder: CameraRecorder;
 
   ws: Server;
   camera: Device;
@@ -52,6 +51,17 @@ export class CameraConnection {
 
     // Initilizes the feed
     this.requestConnection();
+
+    // Start ffmpeg dual-output recorder for this camera
+    this.recorder = new CameraRecorder({
+      cameraId: this.camera.id,
+      segmentSeconds: 360, // 1-minute files; change to 86400 for daily
+      outDirRecordings: "./recordings",
+      outDirPublic: "./public",
+      fps: 10, // tune if you know your frame cadence
+      useHardware: true, // set false if you're on Linux without VAAPI
+    });
+    this.recorder.start();
 
     setInterval(() => {
       const now = new Date().getTime();
@@ -98,6 +108,7 @@ export class CameraConnection {
       this.ws.emit(this.camera.id, this.buffer);
 
       // TODO: pipe into ffmpeg here if needed
+      this.recorder.writeFrame(this.buffer);
     } else {
       console.warn(
         "Frame size mismatch",
