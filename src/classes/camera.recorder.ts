@@ -47,7 +47,7 @@ export class CameraRecorder {
     const hlsOut = path.join(hlsDir, "live.m3u8"); // HLS playlist & segments here
 
     // Choose encoder
-    const vCodec = useHardware ? "h264_videotoolbox" : "libx264";
+    const vCodec = "libx264";
 
     // Keyframe interval aligned to HLS chunk length (~2s)
     // g = fps * 2; keep keyframes every 2s so each HLS segment is independently decodable.
