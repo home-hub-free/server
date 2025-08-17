@@ -20,6 +20,8 @@ export class CameraConnection {
 
   // frame being constructed
   buffer = Buffer.from("");
+  expectedLength: number;
+  receivedLength: number;
 
   ws: Server;
   camera: Device;
@@ -63,34 +65,46 @@ export class CameraConnection {
 
   private handleMessage(message) {
     this.startDisconnectTimeout();
+
     const value = message.toString("utf-8");
-    switch (value) {
-      case FEED_MESSAGE.START:
-        this.onFrameStart();
-        break;
-      case FEED_MESSAGE.END:
-        this.onFrameEnd();
-        break;
-      default:
-        this.onFrameData(message);
+
+    if (value.startsWith("START:")) {
+      const length = parseInt(value.split(":")[1], 10);
+      this.onFrameStart(length);
+    } else if (value === "END") {
+      this.onFrameEnd();
+    } else {
+      this.onFrameData(message);
     }
   }
 
-  private onFrameStart() {
-    this.buffer = Buffer.from("");
+  private onFrameStart(length: number) {
+    this.expectedLength = length;
+    this.receivedLength = 0;
+    this.buffer = Buffer.alloc(length);
   }
 
-  private onFrameData(message) {
-    this.buffer = Buffer.concat([this.buffer, message]);
+  private onFrameData(message: Buffer) {
+    message.copy(this.buffer, this.receivedLength);
+    this.receivedLength += message.length;
   }
 
   private onFrameEnd() {
-    this.currentFrame = this.buffer;
-    this.currentFrameTS = new Date();
-    const data = `data:image/jpg;base64,${this.buffer.toString("base64")}`;
+    if (this.receivedLength === this.expectedLength) {
+      this.currentFrame = this.buffer;
+      this.currentFrameTS = new Date();
 
-    // Broadcast every complete frame
-    this.ws.emit(this.camera.id, this.buffer);
+      // Send binary buffer directly
+      this.ws.emit(this.camera.id, this.buffer);
+
+      // TODO: pipe into ffmpeg here if needed
+    } else {
+      console.warn(
+        "Frame size mismatch",
+        this.receivedLength,
+        this.expectedLength,
+      );
+    }
   }
 
   private startDisconnectTimeout() {
