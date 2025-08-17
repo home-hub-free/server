@@ -1,15 +1,15 @@
 import { Server } from "socket.io";
 import { Device } from "./device.class";
-import dgram from 'dgram';
+import dgram from "dgram";
 
 enum FEED_MESSAGE {
-  START = 'start',
-  END = 'end',
+  START = "start",
+  END = "end",
 }
 
 export class CameraConnection {
   feed = dgram.createSocket({
-    type: 'udp4',
+    type: "udp4",
     reuseAddr: true,
   });
 
@@ -19,7 +19,7 @@ export class CameraConnection {
   // currentFrame
 
   // frame being constructed
-  buffer = Buffer.from('');
+  buffer = Buffer.from("");
 
   ws: Server;
   camera: Device;
@@ -30,22 +30,22 @@ export class CameraConnection {
     this.ws = _ws;
     this.camera = _camera;
 
-    this.feed.on('connect', () => {
-      console.log(this.camera.ip + ' connection started');
+    this.feed.on("connect", () => {
+      console.log(this.camera.ip + " connection started");
     });
 
-    this.feed.on('message', (message) => {
+    this.feed.on("message", (message) => {
       this.handleMessage(message);
     });
 
-    this.feed.on('close', () => {
-      console.log(this.camera.ip + ' connection closed');
+    this.feed.on("close", () => {
+      console.log(this.camera.ip + " connection closed");
       this.onDisconnect();
     });
 
-    this.feed.on('error', () => {
+    this.feed.on("error", () => {
       this.onDisconnect();
-      console.log(this.camera.ip + ' something went wrong');
+      console.log(this.camera.ip + " something went wrong");
     });
 
     // Initilizes the feed
@@ -58,12 +58,12 @@ export class CameraConnection {
       if (now - lastTS > 30_000) {
         this.onDisconnect();
       }
-    }, 5000)
+    }, 5000);
   }
 
   private handleMessage(message) {
     this.startDisconnectTimeout();
-    const value = message.toString('utf-8');
+    const value = message.toString("utf-8");
     switch (value) {
       case FEED_MESSAGE.START:
         this.onFrameStart();
@@ -77,20 +77,20 @@ export class CameraConnection {
   }
 
   private onFrameStart() {
-    this.buffer = Buffer.from('');
+    this.buffer = Buffer.from("");
   }
 
   private onFrameData(message) {
-    this.buffer = Buffer.concat([this.buffer, message])
+    this.buffer = Buffer.concat([this.buffer, message]);
   }
 
   private onFrameEnd() {
     this.currentFrame = this.buffer;
     this.currentFrameTS = new Date();
     const data = `data:image/jpg;base64,${this.buffer.toString("base64")}`;
-    
+
     // Broadcast every complete frame
-    this.ws.emit(this.camera.id, data);
+    this.ws.emit(this.camera.id, this.buffer);
   }
 
   private startDisconnectTimeout() {
@@ -100,12 +100,12 @@ export class CameraConnection {
       // If we reach this point, the camera completely disconnected
       this.timeout = null;
       if (this.onDisconnect) this.onDisconnect();
-    }, 1000)
+    }, 1000);
   }
 
   requestConnection() {
     // Initilizes the feed
-    const data = Buffer.from('#01\r');
+    const data = Buffer.from("#01\r");
     this.feed.send(data, 82, this.camera.ip);
   }
 }

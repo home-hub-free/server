@@ -38,7 +38,7 @@ describe("Device validating time ranges", () => {
     fakeDate.setHours(19);
     jest.setSystemTime(fakeDate);
 
-    // Should have been able to auto trigger since its inside operational time rangess
+    // Should have been able to auto trigger since its inside operational time ranges
     device.autoTrigger(true);
     expect(device.value).toBe(true);
   });
