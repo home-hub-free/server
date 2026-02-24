@@ -5,7 +5,7 @@ import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
 import { Device } from './device.class';
 
-const TIME_TO_INACTIVE = 60 * 1000 * 2;
+const TIME_TO_INACTIVE = 1000 * 10; // Seconds
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
@@ -107,7 +107,7 @@ export class Sensor {
     this.effects.on.forEach((fn) => fn());
     if (this.timeout) clearTimeout(this.timeout)
     if (state) {
-      this.handleConsecutiveActivations();
+      // this.handleConsecutiveActivations();
       this.value = true;
       io.emit('sensor-update', {
         id: this.id,
