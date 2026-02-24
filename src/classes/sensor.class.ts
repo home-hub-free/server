@@ -5,7 +5,7 @@ import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
 import { Device } from './device.class';
 
-// const TIME_TO_INACTIVE = 1000 * 15; // Seconds
+const TIME_TO_INACTIVE = 1000 * 10;
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
@@ -105,19 +105,23 @@ export class Sensor {
   private updateMotionSensor(value: any) {
     let state = value === 1;
     if (state) {
-      this.effects.on.forEach((fn) => fn());
       this.value = true;
+      if (this.timeout) clearTimeout(this.timeout)
+      this.effects.on.forEach((fn) => fn());
       io.emit('sensor-update', {
         id: this.id,
         value: true,
       });
     } else {
-      this.effects.off.forEach((fn) => fn());
-      this.value = false;
-      io.emit('sensor-update', {
-        id: this.id,
-        value: false,
-      });
+      this.timeout = setTimeout(() => {
+        this.value = false;
+        this.timeout = null;
+        this.effects.off.forEach((fn) => fn());
+        io.emit('sensor-update', {
+          id: this.id,
+          value: false,
+        });
+      }, TIME_TO_INACTIVE);
     }
   }
 
