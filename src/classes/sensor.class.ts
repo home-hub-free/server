@@ -9,6 +9,7 @@ const TIME_TO_INACTIVE = 1000 * 10;
 
 export const SensorTypesToDataTypes = {
   'motion': 'boolean',
+  'presence': 'boolean',
   'temp/humidity': 'value'
 }
 
@@ -26,7 +27,7 @@ export class Sensor {
   consecutiveActivations = 0;
   consecutiveActivationsTimer = null;
   lastPing: Date = new Date();
-  sensorType: 'motion' | 'temp/humidity';
+  sensorType: 'motion' | 'temp/humidity' | 'presence';
 
   constructor(
     id: string,
@@ -36,7 +37,7 @@ export class Sensor {
     this.id = id;
     this.type = type;
     this.name = name;
-    this.sensorType = name as 'motion' | 'temp/humidity';
+    this.sensorType = name as 'motion' | 'temp/humidity' | 'presence';
     this.mergeDBData();
     this.setSensorDBEffects();
 
@@ -63,6 +64,7 @@ export class Sensor {
   setEffect(effect: any) {
     switch (this.sensorType) {
       case 'motion':
+      case 'presence':
         this.setBooleanSensorEffect(effect);
       case 'temp/humidity':
         this.setTempHumidityEffect(effect)
