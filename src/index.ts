@@ -15,19 +15,19 @@ import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
-import fs from 'fs'
+import fs from "fs";
 
 /**
  * This project requires to be setup with a designated local ip address so the network of
  * devices can communicate directly to it
  */
 const app: Express = express();
-const PORT = 8088;
+const PORT = 8080;
 
 app.use(express.json());
 app.use(cors());
 app.options("*", cors());
-app.use(express.static('public'));
+app.use(express.static("public"));
 const server = http.createServer(app);
 
 server.listen(PORT, () => {
@@ -41,33 +41,32 @@ initDeviceRoutes(app);
 initEffectsRoutes(app);
 initVAssistantRoutes(app);
 
-
 /**
  * This is a list of required files for the server to be able to do specific things
  */
 // Change these to a proper DB eventually
 const DBFiles = [
-  'db/devices.db.json',
-  'db/sensors.db.json',
-  'db/effects.db.json',
-  'db/v-assistant.db.json'
+  "db/devices.db.json",
+  "db/sensors.db.json",
+  "db/effects.db.json",
+  "db/v-assistant.db.json",
 ];
-const CalendarFile = ['google-calendars.json'];
+const CalendarFile = ["google-calendars.json"];
 
 try {
-  fs.readdirSync('db');
+  fs.readdirSync("db");
 } catch (err) {
-  if (err.code === 'ENOENT') {
-    fs.mkdirSync('db');
+  if (err.code === "ENOENT") {
+    fs.mkdirSync("db");
   }
 }
 
 [...DBFiles, ...CalendarFile].forEach((file) => {
   try {
     fs.readFileSync(file);
-  } catch(err) {
+  } catch (err) {
     // Doesn't exist
-    if (err.code === 'ENOENT') {
+    if (err.code === "ENOENT") {
       fs.writeFileSync(file, JSON.stringify({}));
     }
   }
