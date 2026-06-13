@@ -143,32 +143,43 @@ export class Device {
   }
 
   notifyDevice(value: any): Promise<boolean> {
-    return new Promise((resolve, reject) => {
-      if (!this.ip) {
-        log(EVENT_TYPES.error, [
-          `Unable to update Device without IP address: ${this.name}`,
-        ]);
-        resolve(false);
-        return;
-      }
-      axios
-        .get(this.getDeviceUpdateRequestURL(value))
-        .then(() => {
-          this.value = value;
-          io.emit("device-update", buildClientDeviceData(this));
+    if (!this.ip) {
+      log(EVENT_TYPES.error, [
+        `Unable to update Device without IP address: ${this.name}`,
+      ]);
+      return Promise.resolve(false);
+    }
 
-          log(EVENT_TYPES.device_triggered, [
-            `Device triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`,
-          ]);
-          resolve(true);
-        })
-        .catch((reason) => {
-          log(EVENT_TYPES.error, [
-            `Device not found 404, ${this.name}, ${reason}`,
-          ]);
-          reject(false);
-        });
-    });
+    // Commit the intended value optimistically, before the (async) device
+    // round-trip resolves. This guarantees that any effect evaluated while the
+    // request is still in-flight reads the latest intent instead of the stale
+    // confirmed value. Without this, a presence "active" signal arriving while a
+    // grace-period "off" request is pending would compare against the old value,
+    // wrongly conclude "already on", and skip turning the light back on — leaving
+    // the room dark while presence is still detected.
+    const previous = this.value;
+    this.value = value;
+    io.emit("device-update", buildClientDeviceData(this));
+
+    return axios
+      .get(this.getDeviceUpdateRequestURL(value))
+      .then(() => {
+        log(EVENT_TYPES.device_triggered, [
+          `Device triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`,
+        ]);
+        return true;
+      })
+      .catch((reason) => {
+        // Only revert if a newer request hasn't already superseded our value.
+        if (this.value === value) {
+          this.value = previous;
+          io.emit("device-update", buildClientDeviceData(this));
+        }
+        log(EVENT_TYPES.error, [
+          `Device not found 404, ${this.name}, ${reason}`,
+        ]);
+        return false;
+      });
   }
 
   canAutoTrigger(): boolean {

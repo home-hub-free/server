@@ -12,3 +12,6 @@ src/sounds/speech/**
 db/**.**
 
 storage/*
+ai-context.md
+AGENTS.md
+REFACTOR.md

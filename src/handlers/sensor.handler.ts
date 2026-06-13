@@ -38,5 +38,6 @@ export function buildClientSensorData(sensor: Sensor) {
     name: sensor.name,
     value: sensor.value,
     sensorType: sensor.sensorType,
+    ip: sensor.ip,
   };
 }

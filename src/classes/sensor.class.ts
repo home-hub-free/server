@@ -19,6 +19,7 @@ export class Sensor {
   name: string;
   value: any;
   timeout: NodeJS.Timeout;
+  ip: string = '';
   effects = {
     value: [],
     on: [],
@@ -66,6 +67,7 @@ export class Sensor {
       case 'motion':
       case 'presence':
         this.setBooleanSensorEffect(effect);
+        break;
       case 'temp/humidity':
         this.setTempHumidityEffect(effect)
     }
@@ -107,17 +109,26 @@ export class Sensor {
   private updateMotionSensor(value: any) {
     let state = value === 1;
     if (state) {
-      this.value = true;
-      if (this.timeout) clearTimeout(this.timeout)
-      this.effects.on.forEach((fn) => fn());
-      io.emit('sensor-update', {
-        id: this.id,
-        value: true,
-      });
-    } else {
-      this.timeout = setTimeout(() => {
-        this.value = false;
+      // Cancel any pending deactivation from the grace period. Null the handle so
+      // a stale reference can't linger after the timer is cleared.
+      if (this.timeout) {
+        clearTimeout(this.timeout);
         this.timeout = null;
+      }
+      // Edge-trigger: only run on-effects on a real false -> true transition.
+      if (this.value !== true) {
+        this.value = true;
+        this.effects.on.forEach((fn) => fn());
+        io.emit('sensor-update', {
+          id: this.id,
+          value: true,
+        });
+      }
+    } else {
+      if (this.timeout) clearTimeout(this.timeout);
+      this.timeout = setTimeout(() => {
+        this.timeout = null;
+        this.value = false;
         this.effects.off.forEach((fn) => fn());
         io.emit('sensor-update', {
           id: this.id,

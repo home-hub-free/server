@@ -2,6 +2,7 @@ import { Sensor, SensorTypesToDataTypes } from "../classes/sensor.class";
 import { buildClientSensorData, getSensorsData, sensors, SensorsDB } from "../handlers/sensor.handler";
 import { Express } from "express";
 import { io } from "../handlers/websockets.handler";
+import axios from "axios";
 
 export function initSensorRoutes(app: Express) {
   app.get("/get-sensors", (request, response) => {
@@ -11,15 +12,17 @@ export function initSensorRoutes(app: Express) {
   // Called when a sensor connects to the networks and relays its infromation
   // to the server (Also used as a ping function each 10 seconds)
   app.post("/sensor-declare", (request, response) => {
-    let { id, name } = request.body;
+    let { id, name, ip } = request.body;
     let sensor = sensors.find((sensor) => String(sensor.id) === String(id));
 
     if (!sensor) {
       sensor = new Sensor(id, name, SensorTypesToDataTypes[name]);
+      if (ip) sensor.ip = ip;
       io.emit('sensor-declare', buildClientSensorData(sensor));
       sensors.push(sensor);
     } else {
       sensor.lastPing = new Date();
+      if (ip) sensor.ip = ip;
     }
     response.send(true);
   });
@@ -56,5 +59,24 @@ export function initSensorRoutes(app: Express) {
     sensor.mergeDBData();
     io.emit('sensor-update', buildClientSensorData(sensor));
     response.send(true);
+  });
+
+  // Trigger calibration mode on presence sensor
+  app.post('/sensor-calibrate', async (request, response) => {
+    let { id } = request.body;
+    let sensor = sensors.find((sensor) => sensor.id === id);
+
+    if (!sensor || !sensor.ip) {
+      return response.status(400).send({ error: 'Sensor not found or IP unknown' });
+    }
+
+    try {
+      const calibrateUrl = `http://${sensor.ip}/recalibrate`;
+      await axios.post(calibrateUrl, {}, { timeout: 5000 });
+      response.send({ ok: true });
+    } catch (err) {
+      console.error(`Failed to calibrate sensor ${id} at ${sensor.ip}:`, err.message);
+      response.status(500).send({ error: 'Failed to reach device' });
+    }
   });
 }

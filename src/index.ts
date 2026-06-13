@@ -22,11 +22,12 @@ import fs from 'fs'
  * devices can communicate directly to it
  */
 const app: Express = express();
-const PORT = 8080;
+const PORT = 8088;
 
 app.use(express.json());
 app.use(cors());
 app.options("*", cors());
+app.use(express.static('public'));
 const server = http.createServer(app);
 
 server.listen(PORT, () => {
