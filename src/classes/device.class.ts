@@ -12,6 +12,7 @@ type DeviceType = "boolean" | "value";
 
 export type DeviceCategory =
   | "light"
+  | "door"
   | "evap-cooler"
   | "dimmable-light"
   | "blinds"
@@ -27,6 +28,7 @@ export const PRECISION_DEVICES: Array<DeviceCategory> = ["blinds", "camera"];
 
 export const DeviceTypesToDataTypes = {
   light: "boolean",
+  door: "boolean",
   "evap-cooler": "value",
   "dimmable-light": "value",
   blinds: "value",
