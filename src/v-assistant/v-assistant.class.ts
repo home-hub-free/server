@@ -2,7 +2,7 @@ import { getDayTimeWord, IForecastData, updateWeatherData } from '../handlers/fo
 import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets';
 import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
-import JSONdb from 'simple-json-db';
+import { ConfigRepo } from '../db/config.repo';
 import { sensors } from '../handlers/sensor.handler';
 import { devices } from '../handlers/device.handler';
 import { exec } from 'child_process';
@@ -18,7 +18,7 @@ if (!fs.existsSync('./src/sounds/speech/')) {
   fs.mkdirSync('./src/sounds/speech/');
 }
 
-export const VAssistantDB = new JSONdb('db/v-assistant.db.json');
+export const VAssistantDB = new ConfigRepo();
 
 interface ISpeechPromise {
   text: string,

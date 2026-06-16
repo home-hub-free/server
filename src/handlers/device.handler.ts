@@ -1,9 +1,9 @@
 import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
-import JSONdb from "simple-json-db";
+import { DevicesRepo } from "../db/devices.repo";
 import { Request } from "express";
 import { createStorageStream } from "./camera-storage-handler";
-export const DevicesDB = new JSONdb("db/devices.db.json");
+export const DevicesDB = new DevicesRepo();
 
 // These get populated as devices join the local network
 export const devices: (Device | DeviceBlinds)[] = [
@@ -115,5 +115,10 @@ export function buildClientDeviceData(device: Device): DeviceData {
     deviceCategory: device.deviceCategory,
     manual: device.manual,
     operationalRanges: device.operationalRanges,
+    // zone/unit feed the memory/LLM layer (generated columns in SQLite). Only
+    // included when set so unconfigured devices don't persist empty values and
+    // so this full-record write doesn't wipe a previously-configured zone.
+    ...(device.zone ? { zone: device.zone } : {}),
+    ...(device.unit ? { unit: device.unit } : {}),
   };
 }

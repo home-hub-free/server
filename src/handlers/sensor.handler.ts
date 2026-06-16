@@ -1,7 +1,7 @@
-import JSONdb from 'simple-json-db';
+import { SensorsRepo } from '../db/sensors.repo';
 import { Sensor } from '../classes/sensor.class';
 import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
-export const SensorsDB = new JSONdb('db/sensors.db.json');
+export const SensorsDB = new SensorsRepo();
 
 const testHumiditySensor = new Sensor('123', 'temp/humidity', 'value')
 testHumiditySensor.value = '23.5:10.5'

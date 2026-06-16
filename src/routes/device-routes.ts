@@ -16,6 +16,10 @@ import {
   checkDeviceEffects,
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
+import {
+  emitDeviceDeclare,
+  emitDeviceState,
+} from "../clients/ingestion";
 
 export function initDeviceRoutes(app: Express) {
   app.get("/get-devices", (request, response) => {
@@ -52,6 +56,7 @@ export function initDeviceRoutes(app: Express) {
       );
       devices.push(device);
       io.emit("device-declare", buildClientDeviceData(device));
+      emitDeviceDeclare(device);
     } else {
       device.lastPing = new Date();
     }
@@ -129,6 +134,8 @@ export function initDeviceRoutes(app: Express) {
     const clientData = buildClientDeviceData(device);
     DevicesDB.set(device.id, clientData);
     io.emit("device-update", clientData);
+    // Registry info (name/zone/category) may have changed — re-declare to memory.
+    emitDeviceDeclare(device);
     response.send(true);
   });
 
@@ -153,6 +160,8 @@ export function initDeviceRoutes(app: Express) {
     const clientData = buildClientDeviceData(device);
     DevicesDB.set(device.id, clientData);
     io.emit("device-update", clientData);
+    // Device-reported readings (e.g. cooler temps) are live telemetry for the LLM.
+    emitDeviceState(device, "device");
     response.send(true);
   });
 }

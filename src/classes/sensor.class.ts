@@ -4,6 +4,7 @@ import { io } from '../handlers/websockets.handler';
 import { EffectsDB } from '../routes/effects-routes';
 import { assistant } from '../v-assistant/v-assistant.class';
 import { Device } from './device.class';
+import { emitSensorEvent } from '../clients/ingestion';
 
 const TIME_TO_INACTIVE = 1000 * 10;
 
@@ -123,6 +124,7 @@ export class Sensor {
           id: this.id,
           value: true,
         });
+        emitSensorEvent(this, 'device');
       }
     } else {
       if (this.timeout) clearTimeout(this.timeout);
@@ -134,6 +136,7 @@ export class Sensor {
           id: this.id,
           value: false,
         });
+        emitSensorEvent(this, 'device');
       }, TIME_TO_INACTIVE);
     }
   }
@@ -151,6 +154,7 @@ export class Sensor {
       id: this.id,
       value: this.value,
     });
+    emitSensorEvent(this, 'device');
 
     // TODO: handle value effects
     this.effects.value.forEach(effect => effect());

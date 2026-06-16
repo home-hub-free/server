@@ -7,6 +7,7 @@ import {
   pullIpFromAddress,
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
+import { emitDeviceState, IngestionSource } from "../clients/ingestion";
 
 type DeviceType = "boolean" | "value";
 
@@ -43,6 +44,10 @@ export interface DeviceData {
   manual: boolean;
   operationalRanges: string[];
   ip?: string;
+  /** Physical location (e.g. "sala", "recamara"). Consumed by the memory/LLM layer. */
+  zone?: string;
+  /** Unit for value devices (e.g. "C", "%"). Consumed by the memory/LLM layer. */
+  unit?: string;
 }
 
 export type DeviceList = Device[];
@@ -51,6 +56,10 @@ export type DeviceMap = { [key: string]: Device } | {};
 export class Device {
   public ip: string | null = null;
   public manual: boolean = false;
+  // Empty-string (not null) defaults so mergeDBData() restores them from the DB
+  // on reconnect — the merge skips null-valued fields.
+  public zone: string = "";
+  public unit: string = "";
   public value: any;
   public id: string;
   public name: string;
@@ -124,7 +133,7 @@ export class Device {
    */
   async autoTrigger(value: any) {
     if (this.canAutoTrigger() && this.hasChanges(value)) {
-      return this.notifyDevice(value);
+      return this.notifyDevice(value, "device");
     }
   }
 
@@ -135,7 +144,7 @@ export class Device {
    */
   async manualTrigger(value: any): Promise<boolean> {
     this.manual = true;
-    return this.notifyDevice(value).then((success) => {
+    return this.notifyDevice(value, "dashboard").then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);
         this._timer = null;
@@ -144,7 +153,7 @@ export class Device {
     });
   }
 
-  notifyDevice(value: any): Promise<boolean> {
+  notifyDevice(value: any, source: IngestionSource = "system"): Promise<boolean> {
     if (!this.ip) {
       log(EVENT_TYPES.error, [
         `Unable to update Device without IP address: ${this.name}`,
@@ -162,6 +171,8 @@ export class Device {
     const previous = this.value;
     this.value = value;
     io.emit("device-update", buildClientDeviceData(this));
+    // Feed live actor state to the memory/LLM layer (deferred no-op for now).
+    emitDeviceState(this, source);
 
     return axios
       .get(this.getDeviceUpdateRequestURL(value))
@@ -176,6 +187,7 @@ export class Device {
         if (this.value === value) {
           this.value = previous;
           io.emit("device-update", buildClientDeviceData(this));
+          emitDeviceState(this, source);
         }
         log(EVENT_TYPES.error, [
           `Device not found 404, ${this.name}, ${reason}`,

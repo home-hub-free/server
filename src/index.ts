@@ -1,6 +1,10 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+// Run the legacy-JSON -> SQLite migration before any module that reads the DB at
+// import time (assistant singleton, bootstrap sensor). Must stay first.
+import "./db/bootstrap";
+
 import express, { Express } from "express";
 import cors from "cors";
 import {
@@ -42,26 +46,12 @@ initEffectsRoutes(app);
 initVAssistantRoutes(app);
 
 /**
- * This is a list of required files for the server to be able to do specific things
+ * Control-plane state now lives in SQLite (db/home-hub.db), opened + migrated by
+ * the "./db/bootstrap" import above. Only non-DB support files are ensured here.
  */
-// Change these to a proper DB eventually
-const DBFiles = [
-  "db/devices.db.json",
-  "db/sensors.db.json",
-  "db/effects.db.json",
-  "db/v-assistant.db.json",
-];
 const CalendarFile = ["google-calendars.json"];
 
-try {
-  fs.readdirSync("db");
-} catch (err) {
-  if (err.code === "ENOENT") {
-    fs.mkdirSync("db");
-  }
-}
-
-[...DBFiles, ...CalendarFile].forEach((file) => {
+CalendarFile.forEach((file) => {
   try {
     fs.readFileSync(file);
   } catch (err) {

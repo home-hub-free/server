@@ -11,6 +11,7 @@ export const EVENT_TYPES = {
   room_innactive: '[ROOM_INNACTIVE]',
   timer_reset: '[TIMER RESET]',
   init_value: '[INIT VALUE]',
+  info: '[INFO]',
   error: '[ERROR]'
 };
 
