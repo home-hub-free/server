@@ -14,6 +14,7 @@ import {
 
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
+import { initIngestion } from "./clients/ingestion";
 
 import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
@@ -39,6 +40,9 @@ server.listen(PORT, () => {
 });
 
 initWebSockets(server);
+
+// Producer-only ingestion seam → MQTT (no-op unless INGESTION_ENABLED=true).
+initIngestion();
 
 initSensorRoutes(app);
 initDeviceRoutes(app);

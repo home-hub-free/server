@@ -1,3 +1,4 @@
+import mqtt, { MqttClient } from "mqtt";
 import { EVENT_TYPES, log } from "../logger";
 
 /**
@@ -12,11 +13,14 @@ import { EVENT_TYPES, log } from "../logger";
  * that into memory-service writes. The hub never touches memory-service or its
  * Postgres/Kuzu directly.
  *
- * TRANSPORT IS DEFERRED. Per the migration decision, the MQTT publisher is not
- * implemented yet (the broker isn't installed). These functions are the stable
- * interface + hook points; `publish()` is a guarded no-op so the control plane
- * has zero dependency on the brain being up. Stage 1 implements `publish()` only
- * — call sites and payload shapes already exist.
+ * TRANSPORT (Stage 1): `publish()` ships events to Mosquitto over MQTT, but only
+ * when `INGESTION_ENABLED=true`. The whole seam stays a guarded no-op otherwise,
+ * so the control plane has ZERO runtime dependency on the broker/brain being up:
+ *  - with the flag unset no client is ever created (tests + default deploys);
+ *  - publishes are fire-and-forget QoS 0, gated on a live connection (events are
+ *    dropped, never buffered, if the broker is down — this is best-effort
+ *    telemetry, not control traffic);
+ *  - nothing here ever throws into a device action (`emit` swallows + logs).
  *
  * Params are duck-typed (not `Device`/`Sensor`) to avoid an import cycle with the
  * device/sensor classes.
@@ -56,18 +60,94 @@ export interface IngestionEvent {
   channel: "state" | "sensor" | "declare";
 }
 
-// Default OFF: the seam exists but emits nothing until Stage 1 wires the broker.
+// Default OFF: the seam exists but emits nothing unless explicitly enabled.
 const ENABLED = process.env.INGESTION_ENABLED === "true";
+const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
+
+// Shared client + liveness flag. The client is created lazily the first time the
+// seam is used while enabled, so disabled deploys (and the Jest suite) never open
+// a socket or keep the event loop alive.
+let client: MqttClient | null = null;
+let connected = false;
 
 /**
- * Deferred transport. Intentionally a no-op until the MQTT publisher lands.
- * Never throws — ingestion must never break a device action.
+ * ensureClient lazily connects to Mosquitto the first time it's needed while
+ * enabled. Returns null when disabled. mqtt.js reconnects on its own; we only
+ * track liveness so publishes are dropped (not queued) while the broker is down.
+ */
+function ensureClient(): MqttClient | null {
+  if (!ENABLED) return null;
+  if (client) return client;
+
+  client = mqtt.connect(MQTT_URL, {
+    clientId: `home-hub-server-${process.pid}`,
+    reconnectPeriod: 5000, // retry every 5s; never give up
+    connectTimeout: 10_000,
+    queueQoSZero: false, // do not buffer telemetry while offline
+    clean: true,
+  });
+
+  client.on("connect", () => {
+    connected = true;
+    log(EVENT_TYPES.info, [`ingestion: MQTT connected (${MQTT_URL})`]);
+  });
+  client.on("reconnect", () => {
+    connected = false;
+  });
+  client.on("close", () => {
+    connected = false;
+  });
+  // Never let a broker error bubble up; just note it and let mqtt.js retry.
+  client.on("error", (err) => {
+    connected = false;
+    log(EVENT_TYPES.error, [`ingestion: MQTT error: ${err.message}`]);
+  });
+
+  return client;
+}
+
+/**
+ * Connect eagerly at boot so the first device event isn't dropped waiting on the
+ * handshake. Safe to call when disabled (no-op). Idempotent.
+ */
+export function initIngestion(): void {
+  ensureClient();
+}
+
+/**
+ * Close the MQTT client (graceful shutdown / test teardown). No-op when nothing
+ * was ever opened.
+ */
+export function closeIngestion(): void {
+  if (client) {
+    client.end(true);
+    client = null;
+    connected = false;
+  }
+}
+
+/**
+ * Publish one event to `homehub/<zone>/<deviceId>/<channel>`. Fire-and-forget
+ * QoS 0, gated on a live connection — best-effort telemetry, never control
+ * traffic. Returns immediately and never throws.
  */
 function publish(event: IngestionEvent): void {
   if (!ENABLED) return;
-  // TODO(Stage 1): publish to MQTT topic
-  //   `homehub/${event.zone || "_"}/${event.deviceId}/${event.channel}`
-  // with the JSON payload. Until then this is a no-op by design.
+  const c = ensureClient();
+  if (!c || !connected) return; // broker not up yet — drop, don't buffer
+
+  const topic = `homehub/${event.zone || "_"}/${event.deviceId}/${event.channel}`;
+  const payload = JSON.stringify({
+    deviceId: event.deviceId,
+    zone: event.zone,
+    ts: event.ts,
+    value: event.value,
+    unit: event.unit,
+    source: event.source,
+  });
+  c.publish(topic, payload, { qos: 0 }, (err) => {
+    if (err) log(EVENT_TYPES.error, [`ingestion: publish to ${topic} failed: ${err.message}`]);
+  });
 }
 
 function emit(event: IngestionEvent): void {

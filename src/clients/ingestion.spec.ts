@@ -2,6 +2,8 @@ import {
   emitDeviceState,
   emitSensorEvent,
   emitDeviceDeclare,
+  initIngestion,
+  closeIngestion,
 } from "./ingestion";
 
 // Transport is deferred: with INGESTION_ENABLED unset, every emit must be a safe
@@ -27,5 +29,12 @@ describe("ingestion seam (deferred transport)", () => {
 
   it("tolerates missing optional fields", () => {
     expect(() => emitDeviceState({ id: "d3", value: null }, "system")).not.toThrow();
+  });
+
+  it("initIngestion/closeIngestion are no-ops when disabled (no socket opened)", () => {
+    // With INGESTION_ENABLED unset, no MQTT client must be created — otherwise the
+    // open socket would keep Jest's event loop alive and hang the run.
+    expect(() => initIngestion()).not.toThrow();
+    expect(() => closeIngestion()).not.toThrow();
   });
 });
