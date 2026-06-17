@@ -20,6 +20,8 @@ import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
+import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
+import { Bonjour } from "bonjour-service";
 import fs from "fs";
 
 /**
@@ -37,6 +39,16 @@ const server = http.createServer(app);
 
 server.listen(PORT, () => {
   console.log("App working at: ", PORT);
+
+  // Advertise the hub over mDNS as _homehub._tcp so devices discover it by
+  // service instead of a hardcoded IP. Moving the hub then needs no reflash —
+  // devices re-resolve via HomeHubDevice::resolveHub(). See devices/_shared.
+  try {
+    new Bonjour().publish({ name: "home-hub", type: "homehub", port: PORT });
+    console.log("mDNS: advertising _homehub._tcp on", PORT);
+  } catch (err) {
+    console.error("mDNS advertise failed:", err);
+  }
 });
 
 initWebSockets(server);
@@ -48,6 +60,8 @@ initSensorRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);
 initVAssistantRoutes(app);
+ensureFirmwareStore();
+initFirmwareRoutes(app);
 
 /**
  * Control-plane state now lives in SQLite (db/home-hub.db), opened + migrated by
