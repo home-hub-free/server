@@ -21,6 +21,7 @@ import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
+import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { Bonjour } from "bonjour-service";
 import fs from "fs";
 
@@ -62,6 +63,7 @@ initEffectsRoutes(app);
 initVAssistantRoutes(app);
 ensureFirmwareStore();
 initFirmwareRoutes(app);
+initDeviceLogRoutes(app);
 
 /**
  * Control-plane state now lives in SQLite (db/home-hub.db), opened + migrated by
