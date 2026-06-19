@@ -6,13 +6,10 @@ import { ConfigRepo } from '../db/config.repo';
 import { sensors } from '../handlers/sensor.handler';
 import { devices } from '../handlers/device.handler';
 import { exec } from 'child_process';
+import { synthesizeToFile } from '../clients/tts';
 const player = require('play-sound')({});
-const AWS = require('aws-sdk');
-const emmaSpeechPath = './src/sounds/speech/say.mp3';
+const speechPath = './src/sounds/speech/say.wav';
 const preSpeechSound =  './src/sounds/pre-notifier.mp3';
-const Polly = new AWS.Polly({
-  region: 'us-east-1'
-});
 
 if (!fs.existsSync('./src/sounds/speech/')) {
   fs.mkdirSync('./src/sounds/speech/');
@@ -44,13 +41,6 @@ class VAssistant {
   public screenSensors = [];
 
   private speechQueue: ISpeechPromise[] = [];
-  private pollyOptions = {
-    Engine: 'neural',
-    LanguageCode: 'en-GB',
-    OutputFormat: 'mp3',
-    Text: '',
-    VoiceId: 'Emma'
-  };
   private allowedSpeakTimeRanges = [];
   private screenTimeout = null;
   private screenTimeOn = 1000 * 60 * 5;
@@ -146,27 +136,28 @@ class VAssistant {
    */
   private playQueue(soundNotify?: boolean) {
     let promise = this.speechQueue[0];
-    this.pollyOptions.Text = promise.text;
-    Polly.synthesizeSpeech(this.pollyOptions, (err, data) => {
-      if (err) return promise.reject(err);
-
-      fs.writeFileSync(emmaSpeechPath, data.AudioStream);
-      if (soundNotify) {
-        player.play(preSpeechSound, () => {
-          player.play(emmaSpeechPath, () => {
+    synthesizeToFile({ text: promise.text, outPath: speechPath })
+      .then(() => {
+        const playSpeech = () => {
+          player.play(speechPath, () => {
             this.speechQueue.shift();
             promise.resolve(true);
-            if (this.speechQueue.length) this.playQueue();  
+            if (this.speechQueue.length) this.playQueue();
           });
-        });
-      } else {
-        player.play(emmaSpeechPath, () => {
-          this.speechQueue.shift();
-          promise.resolve(true);
-          if (this.speechQueue.length) this.playQueue();  
-        });
-      }
-    });
+        };
+        if (soundNotify) {
+          player.play(preSpeechSound, playSpeech);
+        } else {
+          playSpeech();
+        }
+      })
+      .catch((err) => {
+        // tts-service down or stub-503'd: drop the utterance, drain the queue.
+        console.error('[v-assistant] tts-service failed:', err?.message || err);
+        this.speechQueue.shift();
+        promise.resolve(false);
+        if (this.speechQueue.length) this.playQueue();
+      });
   }
 
   private buildForecastSentence(data: IForecastData): string {

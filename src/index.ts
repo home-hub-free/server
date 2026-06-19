@@ -14,6 +14,7 @@ import {
 
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
+import { initStateRoutes } from "./routes/state-routes";
 import { initIngestion } from "./clients/ingestion";
 
 import http from "http";
@@ -60,6 +61,7 @@ initIngestion();
 initSensorRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);
+initStateRoutes(app);
 initVAssistantRoutes(app);
 ensureFirmwareStore();
 initFirmwareRoutes(app);
