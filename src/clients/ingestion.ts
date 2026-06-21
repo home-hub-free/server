@@ -64,6 +64,19 @@ export interface IngestionEvent {
 const ENABLED = process.env.INGESTION_ENABLED === "true";
 const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
 
+// Per-category mute list. Some devices (notably `evap-cooler`) report
+// continuously-changing inside/outside temperatures; feeding every reading to
+// the memory/LLM layer just wakes the agent to evaluate-then-do-nothing. We
+// suppress those device-state/declare emits here until cooling telemetry is
+// redesigned (debounced/threshold-gated). Override via env (comma-separated
+// categories); set to empty to re-enable everything.
+const SUPPRESSED_CATEGORIES = new Set(
+  (process.env.INGESTION_SUPPRESSED_CATEGORIES ?? "evap-cooler")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean),
+);
+
 // Shared client + liveness flag. The client is created lazily the first time the
 // seam is used while enabled, so disabled deploys (and the Jest suite) never open
 // a socket or keep the event loop alive.
@@ -160,6 +173,7 @@ function emit(event: IngestionEvent): void {
 
 /** An actor changed value (manual, auto, or boot-restore). */
 export function emitDeviceState(device: DeviceLike, source: IngestionSource): void {
+  if (device.deviceCategory && SUPPRESSED_CATEGORIES.has(device.deviceCategory)) return;
   emit({
     deviceId: device.id,
     zone: device.zone || "",
@@ -186,6 +200,7 @@ export function emitSensorEvent(sensor: SensorLike, source: IngestionSource): vo
 
 /** A device joined or its registry info (name/zone/category) changed. */
 export function emitDeviceDeclare(device: DeviceLike): void {
+  if (device.deviceCategory && SUPPRESSED_CATEGORIES.has(device.deviceCategory)) return;
   emit({
     deviceId: device.id,
     zone: device.zone || "",
