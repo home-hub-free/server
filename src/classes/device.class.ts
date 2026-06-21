@@ -8,6 +8,7 @@ import {
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
 import { emitDeviceState, IngestionSource } from "../clients/ingestion";
+import { ChannelSpec, channelSchema, buildSetRequests } from "../clients/channels";
 
 type DeviceType = "boolean" | "value";
 
@@ -48,6 +49,10 @@ export interface DeviceData {
   zone?: string;
   /** Unit for value devices (e.g. "C", "%"). Consumed by the memory/LLM layer. */
   unit?: string;
+  /** Stage-3 channel schema (declared by the device, or synthesized from category). */
+  channels?: ChannelSpec[];
+  /** True once the device self-described channels — gates channel-addressed `/set`. */
+  channelAware?: boolean;
 }
 
 export type DeviceList = Device[];
@@ -60,6 +65,16 @@ export class Device {
   // on reconnect — the merge skips null-valued fields.
   public zone: string = "";
   public unit: string = "";
+  /**
+   * Stage-3 compatibility shim (see docs/DATA_CONTRACTS.md). `channelAware` is the
+   * capability signal: false (default) for the un-reflashed fleet, which keeps
+   * getting the legacy `/set?value=` / `/set?fan=&water=` wire; flipped to true
+   * only when a device self-describes `channels` in /device-declare. `channels`
+   * holds the schema (declared, or synthesized from category) so the rest of the
+   * system has a uniform channel view regardless.
+   */
+  public channelAware: boolean = false;
+  public channels: ChannelSpec[] = [];
   public value: any;
   public id: string;
   public name: string;
@@ -113,6 +128,9 @@ export class Device {
     this.type = type;
     // When constructed the name original name is the device category
     this.deviceCategory = name as DeviceCategory;
+    // Default to the category's channel schema; a self-describing device overrides
+    // this (and flips channelAware) when it declares its own channels.
+    this.channels = channelSchema(this.deviceCategory) ?? [];
     this.operationalRanges = operationalRanges || [];
     if (ip) {
       this.ip = pullIpFromAddress(ip);
@@ -142,9 +160,12 @@ export class Device {
    * interactions. This type of trigger will be direct and have no conditions
    * attatched to it
    */
-  async manualTrigger(value: any): Promise<boolean> {
+  async manualTrigger(value: any, source: IngestionSource = "dashboard"): Promise<boolean> {
     this.manual = true;
-    return this.notifyDevice(value, "dashboard").then((success) => {
+    // `source` is the provenance of this direct write (dashboard user, voice, or the LLM agent).
+    // It rides the ingestion emit so consumers can tell agent-induced changes apart — the agent
+    // drops its own ("llm") events to avoid an act → event → act loop.
+    return this.notifyDevice(value, source).then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);
         this._timer = null;
@@ -174,26 +195,84 @@ export class Device {
     // Feed live actor state to the memory/LLM layer (deferred no-op for now).
     emitDeviceState(this, source);
 
-    return axios
-      .get(this.getDeviceUpdateRequestURL(value))
-      .then(() => {
+    // Legacy fleet (channelAware=false): unchanged single-request behavior.
+    if (!this.channelAware) {
+      return axios
+        .get(this.getDeviceUpdateRequestURL(value))
+        .then(() => {
+          log(EVENT_TYPES.device_triggered, [
+            `Device triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`,
+          ]);
+          return true;
+        })
+        .catch((reason) => {
+          // Only revert if a newer request hasn't already superseded our value.
+          if (this.value === value) {
+            this.value = previous;
+            io.emit("device-update", buildClientDeviceData(this));
+            emitDeviceState(this, source);
+          }
+          log(EVENT_TYPES.error, [
+            `Device not found 404, ${this.name}, ${reason}`,
+          ]);
+          return false;
+        });
+    }
+
+    return this.notifyChannels(value, previous, source);
+  }
+
+  /**
+   * Channel-addressed actuation (Stage 3). Issues one request per writable channel
+   * and reverts ONLY the channels whose request failed — partial failure no longer
+   * rolls back the whole device. Falls back to "success" when there's nothing to
+   * send (e.g. a cooler write that changed no actuator channel).
+   */
+  private notifyChannels(value: any, previous: any, source: IngestionSource): Promise<boolean> {
+    const requests = buildSetRequests({
+      ip: this.ip,
+      category: this.deviceCategory,
+      channelAware: true,
+      value,
+      previous,
+    });
+    if (requests.length === 0) return Promise.resolve(true);
+
+    return Promise.all(
+      requests.map((req) =>
+        axios
+          .get(req.url)
+          .then(() => true)
+          .catch((reason) => {
+            this.revertChannel(req.channel, value, previous);
+            log(EVENT_TYPES.error, [
+              `Channel set failed ${this.name} (${req.channel}), ${reason}`,
+            ]);
+            return false;
+          }),
+      ),
+    ).then((results) => {
+      if (results.some((ok) => !ok)) {
+        // At least one channel reverted — re-broadcast the corrected state.
+        io.emit("device-update", buildClientDeviceData(this));
+        emitDeviceState(this, source);
+      } else {
         log(EVENT_TYPES.device_triggered, [
           `Device triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`,
         ]);
-        return true;
-      })
-      .catch((reason) => {
-        // Only revert if a newer request hasn't already superseded our value.
-        if (this.value === value) {
-          this.value = previous;
-          io.emit("device-update", buildClientDeviceData(this));
-          emitDeviceState(this, source);
-        }
-        log(EVENT_TYPES.error, [
-          `Device not found 404, ${this.name}, ${reason}`,
-        ]);
-        return false;
-      });
+      }
+      return results.every(Boolean);
+    });
+  }
+
+  /** Revert a single channel to its previous value after a failed request. Mirrors
+   * the legacy "only if not superseded" guard for single-value devices. */
+  private revertChannel(channel: string | undefined, value: any, previous: any) {
+    if (channel && this.deviceCategory === "evap-cooler") {
+      if (this.value && previous) this.value[channel] = previous[channel];
+    } else if (this.value === value) {
+      this.value = previous;
+    }
   }
 
   canAutoTrigger(): boolean {
