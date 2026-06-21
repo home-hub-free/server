@@ -93,17 +93,76 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
         { key: "unit-temp", role: "sensor", kind: "number", unit: "C", writable: false },
       ];
 
+    // Sensor categories (Stage 4 — the unified Node world treats these the same).
+    case "motion":
+    case "presence":
+      return [{ key: "presence", role: "sensor", kind: "boolean", writable: false }];
+
+    case "temp/humidity":
+      return [
+        { key: "temperature", role: "sensor", kind: "number", unit: "C", writable: false },
+        { key: "humidity", role: "sensor", kind: "number", unit: "%", writable: false },
+      ];
+
     default:
       return null;
   }
 }
 
-/** Read one channel's live value out of a device value blob, coerced to its kind.
- * Multi-channel devices (evap-cooler) key into the blob; single-channel devices
- * carry the value directly. */
+/** Read one channel's live value out of a legacy value blob, coerced to its kind.
+ * Multi-channel devices (evap-cooler) key into the blob; the temp/humidity sensor
+ * splits its "t:h" string; single-channel devices carry the value directly. */
 function readChannelValue(category: string | undefined, spec: ChannelSpec, deviceValue: any): boolean | number {
-  const raw = category === "evap-cooler" ? (deviceValue ?? {})[spec.key] : deviceValue;
+  let raw: any;
+  if (category === "evap-cooler") {
+    raw = (deviceValue ?? {})[spec.key];
+  } else if (category === "temp/humidity") {
+    const [temperature, humidity] = String(deviceValue ?? "").split(":");
+    raw = spec.key === "temperature" ? temperature : humidity;
+  } else {
+    raw = deviceValue;
+  }
   return spec.kind === "boolean" ? toBoolean(raw) : toNumber(raw) ?? 0;
+}
+
+/**
+ * Read a single channel's current value out of a legacy value blob, by key. The
+ * channel-value codec's read half — used by the evaluator and the Node facade to
+ * see channel state without caring how it's packed. Returns undefined for an
+ * unknown channel/category.
+ */
+export function channelValue(
+  category: string | undefined,
+  key: string,
+  deviceValue: any,
+): boolean | number | undefined {
+  const spec = (channelSchema(category) ?? []).find((s) => s.key === key);
+  if (!spec) return undefined;
+  return readChannelValue(category, spec, deviceValue);
+}
+
+/**
+ * Write a single channel's value back into the legacy value blob, returning the new
+ * blob (the codec's write half). Multi-channel devices key into the object; the
+ * temp/humidity sensor rebuilds its "t:h" string; single-channel devices become the
+ * scalar value. Pure — does not mutate the input.
+ */
+export function withChannelValue(
+  category: string | undefined,
+  deviceValue: any,
+  key: string,
+  newValue: boolean | number,
+): any {
+  if (category === "evap-cooler") {
+    return { ...(deviceValue ?? {}), [key]: newValue };
+  }
+  if (category === "temp/humidity") {
+    const [temperature, humidity] = String(deviceValue ?? "").split(":");
+    const t = key === "temperature" ? newValue : temperature ?? "";
+    const h = key === "humidity" ? newValue : humidity ?? "";
+    return `${t}:${h}`;
+  }
+  return newValue;
 }
 
 /** Coerce a possibly-stringy reading to a finite number, else null. */
@@ -208,28 +267,18 @@ export function buildSetRequests(opts: {
  * "t:h" reading becomes two separate, unit-tagged number channels.
  */
 export function sensorToChannels(sensor: SensorLike): Channel[] {
-  switch (sensor.sensorType) {
-    case "motion":
-    case "presence":
-      return [
-        { key: "presence", role: "sensor", kind: "boolean", writable: false, value: toBoolean(sensor.value) },
-      ];
-
-    case "temp/humidity": {
-      const [t, h] = String(sensor.value ?? "").split(":");
-      return [
-        { key: "temperature", role: "sensor", kind: "number", unit: "C", writable: false, value: toNumber(t) ?? 0 },
-        { key: "humidity", role: "sensor", kind: "number", unit: "%", writable: false, value: toNumber(h) ?? 0 },
-      ];
-    }
-
-    default: {
-      // Unknown sensor: emit one generic channel preserving the raw value.
-      const kind: ChannelKind = typeof sensor.value === "boolean" ? "boolean" : "number";
-      const value = kind === "boolean" ? toBoolean(sensor.value) : toNumber(sensor.value) ?? 0;
-      return [
-        { key: "value", role: "sensor", kind, writable: false, value, ...(sensor.unit ? { unit: sensor.unit } : {}) },
-      ];
-    }
+  const specs = channelSchema(sensor.sensorType);
+  if (specs) {
+    return specs.map((spec) => ({
+      ...spec,
+      value: readChannelValue(sensor.sensorType, spec, sensor.value),
+    }));
   }
+
+  // Unknown sensor: emit one generic channel preserving the raw value.
+  const kind: ChannelKind = typeof sensor.value === "boolean" ? "boolean" : "number";
+  const value = kind === "boolean" ? toBoolean(sensor.value) : toNumber(sensor.value) ?? 0;
+  return [
+    { key: "value", role: "sensor", kind, writable: false, value, ...(sensor.unit ? { unit: sensor.unit } : {}) },
+  ];
 }

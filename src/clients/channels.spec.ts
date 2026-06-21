@@ -1,4 +1,4 @@
-import { buildSetRequests, deviceToChannels, sensorToChannels } from "./channels";
+import { buildSetRequests, channelValue, deviceToChannels, sensorToChannels, withChannelValue } from "./channels";
 
 describe("channel projection (Stage 1 data-contract redesign)", () => {
   describe("deviceToChannels", () => {
@@ -144,6 +144,44 @@ describe("channel projection (Stage 1 data-contract redesign)", () => {
       it("emits nothing for a camera (no writable channels)", () => {
         expect(buildSetRequests({ ip, category: "camera", channelAware: true, value: null })).toEqual([]);
       });
+    });
+  });
+
+  describe("channel value codec (Stage 4)", () => {
+    it("reads a single-channel device's scalar value", () => {
+      expect(channelValue("light", "power", true)).toBe(true);
+      expect(channelValue("dimmable-light", "brightness", 42)).toBe(42);
+    });
+
+    it("reads a cooler sub-channel out of the blob", () => {
+      const blob = { fan: true, water: false, target: 26, "room-temp": 29.5, "unit-temp": 31 };
+      expect(channelValue("evap-cooler", "fan", blob)).toBe(true);
+      expect(channelValue("evap-cooler", "room-temp", blob)).toBe(29.5);
+    });
+
+    it("reads temperature/humidity out of the t:h string", () => {
+      expect(channelValue("temp/humidity", "temperature", "23.5:10.5")).toBe(23.5);
+      expect(channelValue("temp/humidity", "humidity", "23.5:10.5")).toBe(10.5);
+    });
+
+    it("returns undefined for an unknown channel", () => {
+      expect(channelValue("light", "brightness", true)).toBeUndefined();
+    });
+
+    it("round-trips read↔write for a cooler sub-channel without mutating input", () => {
+      const blob = { fan: false, water: false, target: 26 };
+      const next = withChannelValue("evap-cooler", blob, "fan", true);
+      expect(next).toEqual({ fan: true, water: false, target: 26 });
+      expect(blob.fan).toBe(false); // input untouched
+      expect(channelValue("evap-cooler", "fan", next)).toBe(true);
+    });
+
+    it("writes a single-channel device value as the scalar itself", () => {
+      expect(withChannelValue("dimmable-light", 0, "brightness", 80)).toBe(80);
+    });
+
+    it("rebuilds the t:h string when writing one temp/humidity channel", () => {
+      expect(withChannelValue("temp/humidity", "23.5:10.5", "temperature", 24)).toBe("24:10.5");
     });
   });
 });
