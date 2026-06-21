@@ -13,6 +13,8 @@ import {
   DevicesDB,
   mergeDeviceData,
   mergeDeviceValue,
+  mergeChannelReadings,
+  applyDeclaredChannels,
   checkDeviceEffects,
 } from "../handlers/device.handler";
 import { io } from "../handlers/websockets.handler";
@@ -35,7 +37,7 @@ export function initDeviceRoutes(app: Express) {
 
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
-    let { id, name, firstPing } = request.body;
+    let { id, name, firstPing, channels } = request.body;
 
     let device = devices.find((device) => device.id === id);
     if (!device) {
@@ -60,6 +62,12 @@ export function initDeviceRoutes(app: Express) {
     } else {
       device.lastPing = new Date();
     }
+
+    // Stage-3 shim: a self-describing device sends its own `channels` and is marked
+    // channel-aware (drives channel-addressed `/set`). A legacy device sends none
+    // and keeps the constructor-synthesized schema + legacy wire. Idempotent across
+    // re-pings; only flips a device forward (never back to legacy).
+    applyDeclaredChannels(device, channels);
     assignDeviceIpAddress(id, request.ip);
 
     /**
@@ -82,8 +90,11 @@ export function initDeviceRoutes(app: Express) {
       return response.send(false);
     }
 
+    // Provenance of this write: dashboard (default), voice, or the LLM agent ("llm"). It flows into
+    // the ingestion emit so the event-driven agent can drop its own changes and not self-trigger.
+    const source = request.body.source === "llm" || request.body.source === "voice" ? request.body.source : "dashboard";
     device
-      .manualTrigger(request.body.value)
+      .manualTrigger(request.body.value, source)
       .then((success) => {
         const clientData = buildClientDeviceData(device);
         if (success) {
@@ -143,9 +154,16 @@ export function initDeviceRoutes(app: Express) {
   // which this endpoint updates read-only data from the device, and this data
   // can be used to run self-automations
   app.post("/device-value-set", (request, response) => {
-    const { id, value } = request.body;
+    const { id, value, channels } = request.body;
     let device = devices.find((device) => device.id === id);
-    mergeDeviceValue(device, value);
+    // Stage-3 shim: accept either the legacy `value` blob or a `channels` array of
+    // {key,value} readings. Both fold into the same internal value blob (storage is
+    // unchanged in Stage 3 — that's Stage 4).
+    if (Array.isArray(channels)) {
+      mergeChannelReadings(device, channels);
+    } else {
+      mergeDeviceValue(device, value);
+    }
 
     // Check if any of the updates values triggers
     // an device effect

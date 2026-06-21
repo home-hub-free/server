@@ -1,5 +1,6 @@
 import { log, EVENT_TYPES } from "../logger";
 import { Device, DeviceBlinds, DeviceData } from "../classes/device.class";
+import { ChannelSpec } from "../clients/channels";
 import { DevicesRepo } from "../db/devices.repo";
 import { Request } from "express";
 import { createStorageStream } from "./camera-storage-handler";
@@ -55,6 +56,35 @@ export function mergeDeviceData(device: Device, data: any) {
 export function mergeDeviceValue(device: Device, value: any) {
   Object.keys(value).forEach((key: string) => {
     device.value[key] = value[key];
+  });
+}
+
+/**
+ * Stage-3 shim: mark a device channel-aware and adopt its self-declared channel
+ * schema. A device without a `channels` array keeps the constructor-synthesized
+ * schema and stays legacy. Only ever flips a device forward (never back), so a
+ * stray legacy re-ping can't downgrade an already-upgraded device.
+ */
+export function applyDeclaredChannels(device: Device, channels: any): void {
+  if (Array.isArray(channels) && channels.length) {
+    device.channelAware = true;
+    device.channels = channels as ChannelSpec[];
+  }
+}
+
+/**
+ * Stage-3 shim: fold an array of {key, value} channel readings into the legacy
+ * value blob. Multi-channel devices (cooler) key into the object; single-channel
+ * devices take the lone reading as the scalar value.
+ */
+export function mergeChannelReadings(device: Device, channels: any[]): void {
+  channels.forEach((c) => {
+    if (!c || c.key == null) return;
+    if (device.value && typeof device.value === "object") {
+      device.value[c.key] = c.value;
+    } else {
+      device.value = c.value;
+    }
   });
 }
 
@@ -120,5 +150,8 @@ export function buildClientDeviceData(device: Device): DeviceData {
     // so this full-record write doesn't wipe a previously-configured zone.
     ...(device.zone ? { zone: device.zone } : {}),
     ...(device.unit ? { unit: device.unit } : {}),
+    // Stage-3 channel schema + capability flag (additive; consumers may ignore).
+    ...(device.channels?.length ? { channels: device.channels } : {}),
+    channelAware: device.channelAware ?? false,
   };
 }
