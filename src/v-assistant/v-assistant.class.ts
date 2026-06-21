@@ -3,8 +3,7 @@ import { Greets, Reminders, SentenceConnectors, SentenceEnders } from './greets'
 import fs from 'fs';
 import { IEventData } from '../handlers/google-calendar.handler';
 import { ConfigRepo } from '../db/config.repo';
-import { sensors } from '../handlers/sensor.handler';
-import { devices } from '../handlers/device.handler';
+import { nodes } from '../handlers/node.handler';
 import { exec } from 'child_process';
 import { synthesizeToFile } from '../clients/tts';
 const player = require('play-sound')({});
@@ -106,7 +105,7 @@ class VAssistant {
 
   toggleCoolingDevices(value: boolean) {
     let toggledDevices = 0;
-    let coolingDevices = devices.filter((device) => device.deviceCategory === 'evap-cooler');
+    let coolingDevices = nodes.filter((node) => node.category === 'evap-cooler');
     coolingDevices.forEach((device) => {
       let currentValue = device.value;
       device.autoTrigger(value);
@@ -170,7 +169,7 @@ class VAssistant {
     let emmaCurrentWeather = `The current temperature is ${data.currentTemp}° ${data.isRising ? 'and rising' : data.isRising === null ? '' : 'and going down'}.`;
     const houseData = VAssistantDB.get('houseData');
     const insideSensorTemperatureId = houseData && houseData.insideSensorTemperature || null;
-    let insideSensorTemperature = sensors.find((sensor) => sensor.id === insideSensorTemperatureId);
+    let insideSensorTemperature = nodes.find((node) => node.id === insideSensorTemperatureId);
     let emmaInsideTemperature = '';
 
     if (insideSensorTemperature) {

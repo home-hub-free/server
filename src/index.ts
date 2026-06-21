@@ -21,6 +21,7 @@ import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initEffectsRoutes } from "./routes/effects-routes";
+import { wireAutomations } from "./automation/wire";
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
 import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { Bonjour } from "bonjour-service";
@@ -61,6 +62,8 @@ initIngestion();
 initSensorRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);
+// Wire the Node automation hook now that the registry + effects store exist.
+wireAutomations();
 initStateRoutes(app);
 initVAssistantRoutes(app);
 ensureFirmwareStore();

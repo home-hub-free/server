@@ -1,4 +1,4 @@
-import { Device } from "../classes/device.class";
+import { Node } from "../classes/node.class";
 import { Server } from "socket.io";
 import { CameraConnection } from "../classes/camera.class";
 
@@ -17,8 +17,8 @@ cameraWSServer.on("connect", () => {
 
 cameraWSServer.listen(8082);
 
-export function createStorageStream(camera: Device) {
-  if (camera.deviceCategory != "camera") return;
+export function createStorageStream(camera: Node) {
+  if (camera.category != "camera") return;
 
   // Connection already exists, return
   if (connections[camera.ip]) return;

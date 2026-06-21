@@ -4,6 +4,7 @@ import { DevicesRepo } from "./devices.repo";
 import { SensorsRepo } from "./sensors.repo";
 import { EffectsRepo } from "./effects.repo";
 import { ConfigRepo } from "./config.repo";
+import { NodesRepo } from "./nodes.repo";
 
 /**
  * One-time migration from the legacy simple-json-db files into SQLite. Runs at
@@ -90,5 +91,54 @@ export function importLegacyJson(): void {
 
   if (imported > 0) {
     log(EVENT_TYPES.info, [`Migrated ${imported} record(s) from legacy JSON DBs into SQLite`]);
+  }
+
+  migrateToNodes();
+}
+
+/**
+ * Stage-4 migration: fold the legacy `devices` + `sensors` rows into the unified
+ * `nodes` table. Idempotent — only writes a node that isn't already present, so it
+ * is safe on every boot. The old tables are left in place (read-only) as a backup;
+ * they can be dropped once the Node cutover has baked in.
+ */
+export function migrateToNodes(): void {
+  const nodes = new NodesRepo();
+  let migrated = 0;
+
+  for (const d of new DevicesRepo().all()) {
+    if (!d || d.id == null || nodes.get(d.id) !== undefined) continue;
+    nodes.set(d.id, {
+      id: d.id,
+      name: d.name,
+      category: d.deviceCategory,
+      type: d.type,
+      value: d.value,
+      manual: d.manual,
+      operationalRanges: d.operationalRanges ?? [],
+      ...(d.zone ? { zone: d.zone } : {}),
+      ...(d.unit ? { unit: d.unit } : {}),
+      ...(d.channels ? { channels: d.channels } : {}),
+      ...(d.channelAware != null ? { channelAware: d.channelAware } : {}),
+    });
+    migrated++;
+  }
+
+  for (const s of new SensorsRepo().all()) {
+    if (!s || s.id == null || nodes.get(s.id) !== undefined) continue;
+    nodes.set(s.id, {
+      id: s.id,
+      ...(s.name != null ? { name: s.name } : {}),
+      ...(s.sensorType ? { category: s.sensorType } : {}),
+      ...(s.type ? { type: s.type } : {}),
+      ...(s.value != null ? { value: s.value } : {}),
+      ...(s.zone ? { zone: s.zone } : {}),
+      ...(s.unit ? { unit: s.unit } : {}),
+    });
+    migrated++;
+  }
+
+  if (migrated > 0) {
+    log(EVENT_TYPES.info, [`Migrated ${migrated} device/sensor record(s) into the unified nodes table`]);
   }
 }

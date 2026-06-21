@@ -17,6 +17,16 @@ import type DatabaseType from "better-sqlite3";
  */
 export function applySchema(db: DatabaseType.Database): void {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS nodes (
+      id          TEXT PRIMARY KEY,
+      data        TEXT NOT NULL,
+      name        TEXT GENERATED ALWAYS AS (json_extract(data, '$.name')) VIRTUAL,
+      category    TEXT GENERATED ALWAYS AS (json_extract(data, '$.category')) VIRTUAL,
+      zone        TEXT GENERATED ALWAYS AS (json_extract(data, '$.zone')) VIRTUAL,
+      unit        TEXT GENERATED ALWAYS AS (json_extract(data, '$.unit')) VIRTUAL,
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS devices (
       id              TEXT PRIMARY KEY,
       data            TEXT NOT NULL,
@@ -54,6 +64,8 @@ export function applySchema(db: DatabaseType.Database): void {
       value TEXT NOT NULL
     );
 
+    CREATE INDEX IF NOT EXISTS idx_nodes_zone    ON nodes(zone);
+    CREATE INDEX IF NOT EXISTS idx_nodes_category ON nodes(category);
     CREATE INDEX IF NOT EXISTS idx_devices_zone  ON devices(zone);
     CREATE INDEX IF NOT EXISTS idx_sensors_zone  ON sensors(zone);
     CREATE INDEX IF NOT EXISTS idx_effects_when  ON effects(when_id);
