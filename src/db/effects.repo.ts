@@ -1,4 +1,9 @@
 import { db } from "./connection";
+import {
+  CategoryResolver,
+  NormalizedEffect,
+  normalizeAll,
+} from "./effects-normalize";
 
 export interface IEffect {
   set: {
@@ -55,6 +60,17 @@ export class EffectsRepo {
       if (r.set_value_to_set != null) effect.set.valueToSet = r.set_value_to_set;
       return effect;
     });
+  }
+
+  /**
+   * Derive-on-read view of the rule list in the Stage-2 normalized
+   * `(node, channel, op)` shape (see docs/DATA_CONTRACTS.md). Computed from the
+   * stored legacy rows on every call — no migration, no second source of truth.
+   * `resolveCategory` maps a `set` node id to its device category so single-value
+   * rules pick the right primary channel; pass the live DevicesRepo lookup.
+   */
+  getNormalized(resolveCategory?: CategoryResolver): NormalizedEffect[] {
+    return normalizeAll(this.get("effects") || [], resolveCategory);
   }
 
   /** Mirrors JSONdb.set — replaces the full rule list atomically. */
