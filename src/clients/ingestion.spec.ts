@@ -31,6 +31,21 @@ describe("ingestion seam (deferred transport)", () => {
     expect(() => emitDeviceState({ id: "d3", value: null }, "system")).not.toThrow();
   });
 
+  it("fanning a device out into per-channel events is a safe no-op when disabled", () => {
+    // Stage 1 projects each emit into per-channel events; with the transport off
+    // they must remain no-ops that never throw. Use a non-suppressed category so the
+    // channel path actually runs (evap-cooler is short-circuited by suppression).
+    expect(() =>
+      emitDeviceState({ id: "dim1", deviceCategory: "dimmable-light", zone: "sala", value: 42 }, "device"),
+    ).not.toThrow();
+  });
+
+  it("splitting a temp/humidity sensor into channels is a safe no-op when disabled", () => {
+    expect(() =>
+      emitSensorEvent({ id: "th1", sensorType: "temp/humidity", value: "23.5:10.5", zone: "cocina" }, "device"),
+    ).not.toThrow();
+  });
+
   it("initIngestion/closeIngestion are no-ops when disabled (no socket opened)", () => {
     // With INGESTION_ENABLED unset, no MQTT client must be created — otherwise the
     // open socket would keep Jest's event loop alive and hang the run.

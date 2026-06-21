@@ -1,5 +1,14 @@
 import mqtt, { MqttClient } from "mqtt";
 import { EVENT_TYPES, log } from "../logger";
+import {
+  Channel,
+  ChannelKind,
+  ChannelRole,
+  DeviceLike,
+  SensorLike,
+  deviceToChannels,
+  sensorToChannels,
+} from "./channels";
 
 /**
  * Ingestion seam — the hub's producer-side feed into the memory/LLM layer.
@@ -33,22 +42,8 @@ export type IngestionSource =
   | "voice"
   | "llm";
 
-interface DeviceLike {
-  id: string;
-  value: any;
-  zone?: string;
-  unit?: string;
-  name?: string;
-  deviceCategory?: string;
-}
-
-interface SensorLike {
-  id: string;
-  value: any;
-  zone?: string;
-  unit?: string;
-  sensorType?: string;
-}
+// DeviceLike / SensorLike are the duck-typed inputs shared with the channel
+// projection — imported from ./channels to keep a single definition.
 
 export interface IngestionEvent {
   deviceId: string;
@@ -58,6 +53,25 @@ export interface IngestionEvent {
   unit: string;
   source: IngestionSource;
   channel: "state" | "sensor" | "declare";
+}
+
+/**
+ * The Stage-1 flat per-channel event (see docs/DATA_CONTRACTS.md). One node-state
+ * change projects to one of these PER CHANNEL — atomic, typed, unit-tagged, and
+ * self-describing, which is what the memory/LLM layer consumes. Published to
+ * `homehub/<zone>/<nodeId>/<channel>` alongside the legacy blob event until
+ * Node-RED is cut over.
+ */
+export interface ChannelEvent {
+  nodeId: string;
+  zone: string;
+  channel: string;
+  role: ChannelRole;
+  kind: ChannelKind;
+  value: boolean | number | string;
+  unit: string;
+  source: IngestionSource;
+  ts: string;
 }
 
 // Default OFF: the seam exists but emits nothing unless explicitly enabled.
@@ -171,6 +185,52 @@ function emit(event: IngestionEvent): void {
   }
 }
 
+/**
+ * Publish one flat channel event to `homehub/<zone>/<nodeId>/<channel>`. Same
+ * fire-and-forget QoS-0, drop-don't-buffer semantics as `publish()`.
+ */
+function publishChannel(event: ChannelEvent): void {
+  if (!ENABLED) return;
+  const c = ensureClient();
+  if (!c || !connected) return;
+
+  const topic = `homehub/${event.zone || "_"}/${event.nodeId}/${event.channel}`;
+  const payload = JSON.stringify(event);
+  c.publish(topic, payload, { qos: 0 }, (err) => {
+    if (err) log(EVENT_TYPES.error, [`ingestion: publish to ${topic} failed: ${err.message}`]);
+  });
+}
+
+/**
+ * Project a node's channels and emit one flat event each. Never throws — channel
+ * emits are additive telemetry and must not break a device action.
+ */
+function emitChannels(
+  nodeId: string,
+  zone: string,
+  channels: Channel[],
+  source: IngestionSource,
+): void {
+  const ts = new Date().toISOString();
+  for (const ch of channels) {
+    try {
+      publishChannel({
+        nodeId,
+        zone: zone || "",
+        channel: ch.key,
+        role: ch.role,
+        kind: ch.kind,
+        value: ch.value,
+        unit: ch.unit || "",
+        source,
+        ts,
+      });
+    } catch (err) {
+      log(EVENT_TYPES.error, [`ingestion channel publish failed: ${err}`]);
+    }
+  }
+}
+
 /** An actor changed value (manual, auto, or boot-restore). */
 export function emitDeviceState(device: DeviceLike, source: IngestionSource): void {
   if (device.deviceCategory && SUPPRESSED_CATEGORIES.has(device.deviceCategory)) return;
@@ -183,6 +243,7 @@ export function emitDeviceState(device: DeviceLike, source: IngestionSource): vo
     source,
     channel: "state",
   });
+  emitChannels(device.id, device.zone || "", deviceToChannels(device), source);
 }
 
 /** A sensor reported a reading / state transition. */
@@ -196,6 +257,7 @@ export function emitSensorEvent(sensor: SensorLike, source: IngestionSource): vo
     source,
     channel: "sensor",
   });
+  emitChannels(sensor.id, sensor.zone || "", sensorToChannels(sensor), source);
 }
 
 /** A device joined or its registry info (name/zone/category) changed. */
@@ -210,4 +272,5 @@ export function emitDeviceDeclare(device: DeviceLike): void {
     source: "device",
     channel: "declare",
   });
+  emitChannels(device.id, device.zone || "", deviceToChannels(device), "device");
 }
