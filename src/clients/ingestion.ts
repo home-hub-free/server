@@ -37,6 +37,7 @@ import {
 
 export type IngestionSource =
   | "device" // an ESP device/sensor event (autonomous)
+  | "automation" // an effect/closed-loop rule firing (not a live device report)
   | "dashboard" // user action via the UI
   | "system" // hub-internal (boot restore, schedules)
   | "voice"
@@ -78,18 +79,48 @@ export interface ChannelEvent {
 const ENABLED = process.env.INGESTION_ENABLED === "true";
 const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
 
-// Per-category mute list. Some devices (notably `evap-cooler`) report
-// continuously-changing inside/outside temperatures; feeding every reading to
-// the memory/LLM layer just wakes the agent to evaluate-then-do-nothing. We
-// suppress those device-state/declare emits here until cooling telemetry is
-// redesigned (debounced/threshold-gated). Override via env (comma-separated
-// categories); set to empty to re-enable everything.
-const SUPPRESSED_CATEGORIES = new Set(
-  (process.env.INGESTION_SUPPRESSED_CATEGORIES ?? "evap-cooler")
-    .split(",")
-    .map((c) => c.trim())
-    .filter(Boolean),
-);
+// Per-channel thresholding (Stage 4c, see docs/DATA_CONTRACTS.md). This replaces
+// the old blanket per-category mute (`SUPPRESSED_CATEGORIES`, which silenced the
+// whole evap-cooler because its continuously-drifting temps woke the agent to
+// evaluate-then-do-nothing). Instead we gate PER CHANNEL: a number channel emits
+// only when it moves by ≥ threshold since its last emit; boolean/enum channels
+// emit only on change. So the cooler regains LLM visibility (fan/water toggles,
+// meaningful temp swings) without the sub-0.5°C noise. Override the band via env.
+const NUMBER_THRESHOLD = Number(process.env.INGESTION_NUMBER_THRESHOLD ?? 0.5);
+
+// Last value emitted per `${nodeId}:${channel}` — the change/threshold baseline.
+const lastEmitted = new Map<string, boolean | number | string>();
+
+/** A number reading is worth emitting if it's the first seen or has moved by at
+ * least `threshold` since the last emit. Pure — exported for testing. */
+export function crossesThreshold(
+  prev: number | undefined,
+  next: number,
+  threshold: number,
+): boolean {
+  return prev === undefined || Math.abs(next - prev) >= threshold;
+}
+
+/** Test seam: clear the threshold baselines so specs start from a clean slate. */
+export function __resetThresholds(): void {
+  lastEmitted.clear();
+}
+
+/** Decide whether a channel's current value clears its emit gate, and (when it
+ * does) advance the baseline. Numbers use the threshold band; everything else
+ * emits only on change. */
+function shouldEmitChannel(nodeId: string, ch: Channel): boolean {
+  const key = `${nodeId}:${ch.key}`;
+  const prev = lastEmitted.get(key);
+  if (ch.kind === "number") {
+    const prevNum = typeof prev === "number" ? prev : undefined;
+    if (!crossesThreshold(prevNum, ch.value as number, NUMBER_THRESHOLD)) return false;
+  } else if (prev === ch.value) {
+    return false;
+  }
+  lastEmitted.set(key, ch.value);
+  return true;
+}
 
 // Shared client + liveness flag. The client is created lazily the first time the
 // seam is used while enabled, so disabled deploys (and the Jest suite) never open
@@ -202,7 +233,9 @@ function publishChannel(event: ChannelEvent): void {
 }
 
 /**
- * Project a node's channels and emit one flat event each. Never throws — channel
+ * Project a node's channels and emit one flat event per channel that clears its
+ * threshold gate. Returns the channels actually emitted (so the caller can gate
+ * the legacy blob on "did anything meaningful change"). Never throws — channel
  * emits are additive telemetry and must not break a device action.
  */
 function emitChannels(
@@ -210,9 +243,11 @@ function emitChannels(
   zone: string,
   channels: Channel[],
   source: IngestionSource,
-): void {
+): Channel[] {
   const ts = new Date().toISOString();
+  const emitted: Channel[] = [];
   for (const ch of channels) {
+    if (!shouldEmitChannel(nodeId, ch)) continue;
     try {
       publishChannel({
         nodeId,
@@ -225,52 +260,47 @@ function emitChannels(
         source,
         ts,
       });
+      emitted.push(ch);
     } catch (err) {
       log(EVENT_TYPES.error, [`ingestion channel publish failed: ${err}`]);
     }
+  }
+  return emitted;
+}
+
+/**
+ * Emit a node's per-channel events (threshold-gated) plus the legacy whole-value
+ * blob — but only emit the blob when at least one channel cleared its gate (or the
+ * node has no scalar channels, e.g. camera, where the blob is the only signal).
+ * This is what lets us drop the old per-category mute: a sub-threshold cooler temp
+ * tick now emits nothing, a fan toggle or a real temp swing emits both.
+ */
+function emitNode(
+  id: string,
+  zone: string,
+  value: any,
+  unit: string,
+  source: IngestionSource,
+  channel: IngestionEvent["channel"],
+  channels: Channel[],
+): void {
+  const emitted = emitChannels(id, zone, channels, source);
+  if (channels.length === 0 || emitted.length > 0) {
+    emit({ deviceId: id, zone, ts: new Date().toISOString(), value, unit, source, channel });
   }
 }
 
 /** An actor changed value (manual, auto, or boot-restore). */
 export function emitDeviceState(device: DeviceLike, source: IngestionSource): void {
-  if (device.deviceCategory && SUPPRESSED_CATEGORIES.has(device.deviceCategory)) return;
-  emit({
-    deviceId: device.id,
-    zone: device.zone || "",
-    ts: new Date().toISOString(),
-    value: device.value,
-    unit: device.unit || "",
-    source,
-    channel: "state",
-  });
-  emitChannels(device.id, device.zone || "", deviceToChannels(device), source);
+  emitNode(device.id, device.zone || "", device.value, device.unit || "", source, "state", deviceToChannels(device));
 }
 
 /** A sensor reported a reading / state transition. */
 export function emitSensorEvent(sensor: SensorLike, source: IngestionSource): void {
-  emit({
-    deviceId: sensor.id,
-    zone: sensor.zone || "",
-    ts: new Date().toISOString(),
-    value: sensor.value,
-    unit: sensor.unit || "",
-    source,
-    channel: "sensor",
-  });
-  emitChannels(sensor.id, sensor.zone || "", sensorToChannels(sensor), source);
+  emitNode(sensor.id, sensor.zone || "", sensor.value, sensor.unit || "", source, "sensor", sensorToChannels(sensor));
 }
 
 /** A device joined or its registry info (name/zone/category) changed. */
 export function emitDeviceDeclare(device: DeviceLike): void {
-  if (device.deviceCategory && SUPPRESSED_CATEGORIES.has(device.deviceCategory)) return;
-  emit({
-    deviceId: device.id,
-    zone: device.zone || "",
-    ts: new Date().toISOString(),
-    value: device.value,
-    unit: device.unit || "",
-    source: "device",
-    channel: "declare",
-  });
-  emitChannels(device.id, device.zone || "", deviceToChannels(device), "device");
+  emitNode(device.id, device.zone || "", device.value, device.unit || "", "device", "declare", deviceToChannels(device));
 }

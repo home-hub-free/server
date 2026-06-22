@@ -2,6 +2,7 @@ import { Request } from "express";
 import { log, EVENT_TYPES } from "../logger";
 import { Node, NodeBlinds, NodeCategory, PRECISION_CATEGORIES } from "../classes/node.class";
 import { NodesRepo } from "../db/nodes.repo";
+import { computeCoolerUpdates } from "../automation/cooler-controller";
 import { createStorageStream } from "./camera-storage-handler";
 
 export const NodesDB = new NodesRepo();
@@ -129,30 +130,23 @@ export function mergeNodeValue(node: Node, value: any): void {
 }
 
 /**
- * Evap-cooler closed-loop controller (ported from the legacy applyEvapCoolerEffects).
- * Given the cooler's room/unit temps + target, returns the fan/water updates, or
- * null when nothing should change. Stays hub-local control (works with the brain down).
+ * Evap-cooler closed-loop controller. Reads the cooler's channels into a flat
+ * snapshot and delegates the hysteresis to the pure `computeCoolerUpdates`
+ * (automation/cooler-controller.ts); returns the fan/water updates, or null when
+ * nothing should change. Stays hub-local control (works with the brain down).
  */
 export function coolerControl(node: Node): { fan?: boolean; water?: boolean } | null {
   if (node.category !== "evap-cooler") return null;
   if (!node.canAutoTrigger()) return null;
 
-  const current = node.value;
-  const target = current.target;
-  const roomSensor = current["room-temp"];
-  const outsideSensor = current["unit-temp"];
-  const updates: { fan?: boolean; water?: boolean } = {};
-
-  let fanState = current.fan;
-  let waterPumpState = current.water;
-
-  fanState = fanState ? roomSensor >= target - 1 : roomSensor >= target + 1;
-  waterPumpState = waterPumpState
-    ? roomSensor >= target - 1 && outsideSensor >= target
-    : roomSensor >= target && outsideSensor >= target;
-
-  if (current.water !== waterPumpState) updates.water = waterPumpState;
-  if (current.fan !== fanState) updates.fan = fanState;
+  const v = node.value ?? {};
+  const updates = computeCoolerUpdates({
+    roomTemp: v["room-temp"],
+    unitTemp: v["unit-temp"],
+    target: v.target,
+    fan: v.fan,
+    water: v.water,
+  });
 
   return Object.keys(updates).length ? updates : null;
 }

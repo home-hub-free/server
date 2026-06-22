@@ -1,6 +1,7 @@
 import {
   normalizeEffect,
   normalizeAll,
+  denormalizeEffect,
   primaryActuatorChannel,
 } from "./effects-normalize";
 
@@ -88,5 +89,49 @@ describe("effect normalization (Stage 2 data-contract redesign)", () => {
   it("is idempotent in shape (re-normalizing produces stable output)", () => {
     const legacy = { when: { id: "th", type: "sensor", is: "temp:higher-than:28" }, set: { id: "c", value: true, valueToSet: "fan" } };
     expect(normalizeEffect(legacy)).toEqual(normalizeEffect(legacy));
+  });
+
+  // Stage 4b: denormalize is the inverse of normalize for every rule normalize can
+  // produce — the invariant the migration relies on for backward-compat reads.
+  describe("denormalize (Stage 4b inverse)", () => {
+    it("round-trips a cooler temp rule (valueToSet preserved)", () => {
+      const legacy = {
+        when: { id: "th-sala", type: "sensor", is: "temp:higher-than:28" },
+        set: { id: "cooler-sala", value: true, valueToSet: "fan" },
+      };
+      expect(denormalizeEffect(normalizeEffect(legacy, () => "evap-cooler"))).toEqual(legacy);
+    });
+
+    it("round-trips a humidity rule", () => {
+      const legacy = {
+        when: { id: "th", type: "sensor", is: "humidity:lower-than:40" },
+        set: { id: "cooler-sala", value: true, valueToSet: "water" },
+      };
+      expect(denormalizeEffect(normalizeEffect(legacy))).toEqual(legacy);
+    });
+
+    it("round-trips a boolean presence rule (no valueToSet on single-value device)", () => {
+      const legacy = {
+        when: { id: "pir", type: "sensor", is: true },
+        set: { id: "light-1", value: true },
+      };
+      expect(denormalizeEffect(normalizeEffect(legacy, () => "light"))).toEqual(legacy);
+    });
+
+    it("round-trips an off-rule (is false)", () => {
+      const legacy = {
+        when: { id: "pir", type: "sensor", is: false },
+        set: { id: "light-1", value: false },
+      };
+      expect(denormalizeEffect(normalizeEffect(legacy, () => "light"))).toEqual(legacy);
+    });
+
+    it("round-trips a time rule", () => {
+      const legacy = {
+        when: { id: "", type: "time", is: "sunset" },
+        set: { id: "light-1", value: true },
+      };
+      expect(denormalizeEffect(normalizeEffect(legacy, () => "light"))).toEqual(legacy);
+    });
   });
 });

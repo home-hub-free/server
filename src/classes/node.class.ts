@@ -116,22 +116,44 @@ export class Node {
   /**
    * Channel-addressed write (Stage 4 actuation entry point). Folds the new channel
    * value into the legacy blob and actuates. For single-channel devices this is
-   * equivalent to a whole-value write.
+   * equivalent to a whole-value write. `manual:true` makes it a user override —
+   * it takes the `manual` lock and clears any pending auto-off timer, exactly like
+   * `manualTrigger` (so a dashboard channel toggle isn't immediately overridden by
+   * `coolerControl`/automation).
    */
-  setChannel(key: string, value: boolean | number, source: IngestionSource = "system"): Promise<boolean> {
-    return this.notify(withChannelValue(this.category, this.value, key, value), source);
+  setChannel(
+    key: string,
+    value: boolean | number,
+    source: IngestionSource = "system",
+    manual = false,
+  ): Promise<boolean> {
+    if (manual) this.manual = true;
+    const result = this.notify(withChannelValue(this.category, this.value, key, value), source);
+    if (!manual) return result;
+    return result.then((success) => {
+      if (this._timer) {
+        clearTimeout(this._timer);
+        this._timer = null;
+      }
+      return success;
+    });
   }
 
   // ── Actuator behaviours (ported from Device) ───────────────────────────────
 
   async autoTrigger(value: any) {
     if (this.canAutoTrigger() && this.hasChanges(value)) {
-      return this.notify(value, "device");
+      // Origin is a rule firing (cooler closed-loop), not a live device report —
+      // tag it so the memory/LLM layer can keep the agent blind to automation.
+      return this.notify(value, "automation");
     }
   }
 
   async manualTrigger(value: any, source: IngestionSource = "dashboard"): Promise<boolean> {
-    this.manual = true;
+    // Only a genuine user action grabs the wheel. Agent (llm/voice) and system
+    // writes actuate without latching `manual`, so automations keep applying —
+    // mirrors the source-aware lock setChannel already does for channel writes.
+    if (source === "dashboard") this.manual = true;
     return this.notify(value, source).then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);

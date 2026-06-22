@@ -5,16 +5,16 @@ import { computeSetActions } from "./run-effects";
 
 /**
  * Wire the Node automation hook (Stage 4). On any sensor channel change, load the
- * effect rules live (normalized, derive-on-read), compute the set-actions against
- * current node state, and apply each by actuating the target node's channel.
+ * effect rules live (normalized — now stored, read as identity), compute the
+ * set-actions against current node state, and apply each by actuating the target
+ * node's channel.
  *
  * Lives outside node.handler.ts to avoid an import cycle (node.handler ↔
  * effects-routes). Called once at boot from index.ts.
  */
 export function wireAutomations(): void {
   Node.automations = (node, channel, value) => {
-    const resolveCategory = (id: string) => nodes.find((n) => n.id === id)?.category;
-    const effects = EffectsDB.getNormalized(resolveCategory);
+    const effects = EffectsDB.getNormalized();
 
     const actions = computeSetActions(
       effects,
@@ -27,7 +27,9 @@ export function wireAutomations(): void {
 
     actions.forEach((action) => {
       const target = nodes.find((n) => n.id === action.nodeId);
-      if (target) target.setChannel(action.channel, action.value, "device");
+      // Effect-driven actuation: tag as "automation" so the memory/LLM layer can
+      // filter it out of the agent's reactive stream (still persisted for auditing).
+      if (target) target.setChannel(action.channel, action.value, "automation");
     });
   };
 }

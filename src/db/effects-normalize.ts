@@ -157,3 +157,77 @@ export function normalizeAll(
 ): NormalizedEffect[] {
   return (effects || []).map((e) => normalizeEffect(e, resolveCategory));
 }
+
+// ---------------------------------------------------------------------------
+// Inverse: normalized → legacy (Stage 4b).
+//
+// As of Stage 4b the normalized shape is what's *stored*; the legacy `IEffect`
+// form now only exists at the edges that still speak it (`GET /get-effects`, the
+// state dump, the one-time JSON import). `denormalize*` reconstructs that form
+// from a normalized row without needing a category resolver — the channel is
+// already in hand. It is the exact inverse of `normalize*` for every rule
+// `normalize*` can produce (round-trip-proven in the repo tests).
+// ---------------------------------------------------------------------------
+
+/** Cooler sub-keys are the only channels the legacy shape carried as `valueToSet`;
+ * single-value devices wrote `device.value` directly (no `valueToSet`). */
+const MULTI_CHANNEL_KEYS = new Set(["fan", "water", "target"]);
+
+/** Inverse of `fieldToChannel`. */
+function channelToField(channel: string): string {
+  switch (channel) {
+    case "temperature":
+      return "temp";
+    case "humidity":
+      return "humidity";
+    default:
+      return channel;
+  }
+}
+
+/** Inverse of `comparisonToOp`. */
+function opToComparison(op: EffectOp): string {
+  switch (op) {
+    case "gt":
+      return "higher-than";
+    case "lt":
+      return "lower-than";
+    default:
+      return "eq";
+  }
+}
+
+function denormalizeWhen(when: Condition): IEffect["when"] {
+  if (when.source === "time") {
+    return { id: "", type: "time", is: when.at };
+  }
+  // Boolean (presence/motion) condition → legacy truthiness rule.
+  if (when.op === "eq" && typeof when.value === "boolean") {
+    return { id: when.nodeId, type: "sensor", is: when.value };
+  }
+  // Value comparison → "field:comparison:target".
+  return {
+    id: when.nodeId,
+    type: "sensor",
+    is: `${channelToField(when.channel)}:${opToComparison(when.op)}:${when.value}`,
+  };
+}
+
+function denormalizeSet(set: NormalizedEffect["set"]): IEffect["set"] {
+  const legacy: IEffect["set"] = { id: set.nodeId, value: set.value };
+  if (MULTI_CHANNEL_KEYS.has(set.channel)) legacy.valueToSet = set.channel;
+  return legacy;
+}
+
+/** Convert one normalized effect back to the legacy `IEffect` shape. */
+export function denormalizeEffect(effect: NormalizedEffect): IEffect {
+  return {
+    when: denormalizeWhen(effect.when),
+    set: denormalizeSet(effect.set),
+  };
+}
+
+/** Convert a full normalized rule list back to the legacy shape. */
+export function denormalizeAll(effects: NormalizedEffect[]): IEffect[] {
+  return (effects || []).map(denormalizeEffect);
+}

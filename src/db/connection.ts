@@ -29,6 +29,9 @@ function resolveDbPath(): string {
 }
 
 const dbPath = resolveDbPath();
+/** The resolved DB file path (":memory:" under tests). Used by the Stage-4b
+ * migration to write a verified `.bak` snapshot before mutating the schema. */
+export const DB_FILE = dbPath;
 if (dbPath !== ":memory:") {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

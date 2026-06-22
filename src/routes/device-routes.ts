@@ -66,10 +66,12 @@ export function initDeviceRoutes(app: Express) {
         ? request.body.source
         : "dashboard";
 
-    // Accept either a whole-value write or a channel-addressed one (Stage 4).
+    // Accept either a whole-value write or a channel-addressed one (Stage 4). A
+    // dashboard channel write is a user override: lock `manual` like manualTrigger
+    // does (voice/llm channel nudges stay non-locking, per the Stage-4a design).
     const write =
       request.body.channel != null
-        ? node.setChannel(request.body.channel, request.body.value, source)
+        ? node.setChannel(request.body.channel, request.body.value, source, source === "dashboard")
         : node.manualTrigger(request.body.value, source);
 
     write
