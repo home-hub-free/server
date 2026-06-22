@@ -35,6 +35,21 @@ interface SensorSnap {
   unit?: string;
 }
 
+// Local ISO-8601 with offset (e.g. 2026-06-22T15:56:15-06:00). Unlike Date.toISOString() (always
+// UTC "Z"), this matches dayPart/hour — which are local (getHours) — so the agent never sees a
+// UTC timestamp paired with a local hour.
+function localISO(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const tz = d.getTimezoneOffset(); // minutes; positive when local is behind UTC (CST → 360)
+  const sign = tz <= 0 ? "+" : "-";
+  const abs = Math.abs(tz);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
+
 function dayPart(d: Date): "morning" | "afternoon" | "evening" | "night" {
   const h = d.getHours();
   if (h < 6) return "night";
@@ -80,7 +95,7 @@ export function initStateRoutes(app: Express): void {
 
     res.json({
       ok: true,
-      now: now.toISOString(),
+      now: localISO(now),
       dayPart: dayPart(now),
       hour: now.getHours(),
       zones,
