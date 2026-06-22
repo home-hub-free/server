@@ -5,8 +5,7 @@ import { log, EVENT_TYPES } from '../logger';
 import { forecast, updateWeatherData } from './forecast.handler';
 import { readCalendars, ICalendarData, IEventData } from './google-calendar.handler';
 import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
-import { sensors } from './sensor.handler';
-import { devices } from './device.handler';
+import { nodes } from './node.handler';
 
 export let dailyEvents: any = {
   sunrise: {},
@@ -22,15 +21,10 @@ setInterval(() => {
   if (process.env.LOCAL === 'true') return;
   
   let now = new Date();
-  for (let i = devices.length - 1; i >= 0; i--) {
-    const device = devices[i];
-    const offlineTime = now.getTime() - device.lastPing.getTime();
-    if (offlineTime > 30 * 1000) devices.splice(i, 1)
-  }
-  for (let i = sensors.length - 1; i >= 0; i--) {
-    const sensor = sensors[i];
-    const offlineTime = now.getTime() - sensor.lastPing.getTime();
-    if (offlineTime > 30 * 1000) sensors.splice(i, 1)
+  // Drop any node we haven't heard from in 30s (devices + sensors share one registry now).
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const offlineTime = now.getTime() - nodes[i].lastPing.getTime();
+    if (offlineTime > 30 * 1000) nodes.splice(i, 1);
   }
 }, 60 * 1000);
 
@@ -40,7 +34,7 @@ setInterval(() => {
     const houseData = VAssistantDB.get('houseData');
     const insideTempSensor = houseData && houseData.insideSensorTemperature;
     if (insideTempSensor) {
-      const sensor = sensors.find((sensor) => sensor.id === houseData.insideSensorTemperature);
+      const sensor = nodes.find((node) => node.id === houseData.insideSensorTemperature);
       const temperature = sensor && sensor.value && sensor.value.split(':')[0];
       const currentHour = new Date().getHours();
       const outsideHotter = parseFloat(temperature) < forecast.hourlyTemperatures[currentHour];

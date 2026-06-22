@@ -5,6 +5,8 @@ import { db } from "./connection";
 import { DevicesRepo } from "./devices.repo";
 import { SensorsRepo } from "./sensors.repo";
 import { EffectsRepo } from "./effects.repo";
+import { NodesRepo } from "./nodes.repo";
+import { migrateEffectsToNormalized } from "./migrate";
 import { ConfigRepo } from "./config.repo";
 
 describe("DevicesRepo (simple-json-db drop-in)", () => {
@@ -96,6 +98,85 @@ describe("EffectsRepo (relational, JSONdb-compatible surface)", () => {
   it("returns an empty array after clearing", () => {
     repo.set("effects", []);
     expect(repo.get("effects")).toEqual([]);
+  });
+
+  it("setNormalized then getNormalized is identity (Stage 4b canonical surface)", () => {
+    const normalized = [
+      {
+        when: { source: "sensor" as const, nodeId: "th", channel: "temperature", op: "gt" as const, value: 28 },
+        set: { nodeId: "cooler", channel: "fan", value: true },
+        enabled: true,
+      },
+      {
+        when: { source: "time" as const, at: "sunset" },
+        set: { nodeId: "light", channel: "power", value: true },
+        enabled: false,
+      },
+    ];
+    repo.setNormalized(normalized);
+    expect(repo.getNormalized()).toEqual(normalized);
+  });
+
+  it("addNormalized appends a single rule", () => {
+    repo.setNormalized([]);
+    repo.addNormalized({
+      when: { source: "sensor", nodeId: "pir", channel: "presence", op: "eq", value: true },
+      set: { nodeId: "light", channel: "power", value: true },
+      enabled: true,
+    });
+    expect(repo.getNormalized()).toHaveLength(1);
+  });
+});
+
+describe("Stage-4b effects migration (migrateEffectsToNormalized)", () => {
+  it("rebuilds a legacy effects table into normalized storage", () => {
+    // Recreate the pre-4b legacy table shape and seed it.
+    db.exec("DROP TABLE effects");
+    db.exec(`
+      CREATE TABLE effects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        when_id TEXT NOT NULL, when_type TEXT NOT NULL, when_is TEXT NOT NULL,
+        set_id TEXT NOT NULL, set_value TEXT NOT NULL, set_value_to_set TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    db.prepare(
+      `INSERT INTO effects (when_id, when_type, when_is, set_id, set_value, set_value_to_set)
+       VALUES (@when_id, @when_type, @when_is, @set_id, @set_value, @set_value_to_set)`,
+    ).run({
+      when_id: "th-sala", when_type: "sensor", when_is: JSON.stringify("temp:higher-than:28"),
+      set_id: "cooler-sala", set_value: JSON.stringify(true), set_value_to_set: "fan",
+    });
+
+    // Seed a node so the category resolver picks the right primary channel.
+    new NodesRepo().set("cooler-sala", { id: "cooler-sala", category: "evap-cooler" });
+
+    migrateEffectsToNormalized();
+
+    // Table is now the new shape and the rule is normalized.
+    const cols = db.prepare("PRAGMA table_info(effects)").all() as { name: string }[];
+    expect(cols.some((c) => c.name === "when_source")).toBe(true);
+    expect(cols.some((c) => c.name === "when_is")).toBe(false);
+    expect(new EffectsRepo().getNormalized()).toEqual([
+      {
+        when: { source: "sensor", nodeId: "th-sala", channel: "temperature", op: "gt", value: 28 },
+        set: { nodeId: "cooler-sala", channel: "fan", value: true },
+        enabled: true,
+      },
+    ]);
+  });
+
+  it("is a no-op when the table is already normalized", () => {
+    const repo = new EffectsRepo();
+    repo.setNormalized([
+      {
+        when: { source: "sensor", nodeId: "pir", channel: "presence", op: "eq", value: true },
+        set: { nodeId: "light", channel: "power", value: true },
+        enabled: true,
+      },
+    ]);
+    migrateEffectsToNormalized();
+    expect(repo.getNormalized()).toHaveLength(1);
   });
 });
 

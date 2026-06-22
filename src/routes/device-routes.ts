@@ -1,167 +1,146 @@
 import { Express } from "express";
+import { PRECISION_CATEGORIES } from "../classes/node.class";
 import {
-  Device,
-  DeviceBlinds,
-  DeviceTypesToDataTypes,
-  PRECISION_DEVICES,
-} from "../classes/device.class";
-import {
-  devices,
-  assignDeviceIpAddress,
-  getDevices,
-  buildClientDeviceData,
-  DevicesDB,
-  mergeDeviceData,
-  mergeDeviceValue,
-  checkDeviceEffects,
-} from "../handlers/device.handler";
+  nodes,
+  findNode,
+  createNode,
+  assignNodeIp,
+  getDeviceNodes,
+  buildClientNodeData,
+  NodesDB,
+  mergeNodeData,
+  mergeNodeValue,
+  mergeChannelReadings,
+  applyDeclaredChannels,
+  coolerControl,
+  persistNode,
+} from "../handlers/node.handler";
 import { io } from "../handlers/websockets.handler";
-import {
-  emitDeviceDeclare,
-  emitDeviceState,
-} from "../clients/ingestion";
+import { emitDeviceDeclare, emitDeviceState } from "../clients/ingestion";
+import { NodeBlinds } from "../classes/node.class";
 
 export function initDeviceRoutes(app: Express) {
   app.get("/get-devices", (request, response) => {
-    response.send(getDevices());
+    response.send(getDeviceNodes());
   });
 
   app.post("/device-get-actions", (request, response) => {
-    let { id } = request.body;
-    let dbStoredData = DevicesDB.get(id);
-    if (dbStoredData.actions) return response.send(dbStoredData.actions);
-    return response.send([]);
+    const stored = NodesDB.get(request.body.id);
+    return response.send(stored?.actions ?? []);
   });
 
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
-    let { id, name, firstPing } = request.body;
+    let { id, name, firstPing, channels } = request.body;
 
-    let device = devices.find((device) => device.id === id);
-    if (!device) {
-      let DeviceClass = Device;
-      switch (name) {
-        case "blinds":
-          DeviceClass = DeviceBlinds;
-          break;
-        default:
-          DeviceClass = Device;
-      }
-      device = new DeviceClass(
-        id,
-        name,
-        DeviceTypesToDataTypes[name],
-        null,
-        request.ip,
-      );
-      devices.push(device);
-      io.emit("device-declare", buildClientDeviceData(device));
-      emitDeviceDeclare(device);
+    let node = findNode(id);
+    if (!node) {
+      node = createNode(id, name, request.ip);
+      nodes.push(node);
+      io.emit("device-declare", buildClientNodeData(node));
+      emitDeviceDeclare(node.toClientData());
     } else {
-      device.lastPing = new Date();
+      node.lastPing = new Date();
     }
-    assignDeviceIpAddress(id, request.ip);
 
-    /**
-     * Device could have been reseted turned off for whatever reason
-     * if its the first ping, make sure to update ONLY if its not a
-     * precision device, (avoid breaking stuff)
-     */
-    const isFirstPing = firstPing === "true"; // I don't know how to serialize to bool in cpp yet :(
-    if (isFirstPing && !PRECISION_DEVICES.includes(device.deviceCategory)) {
-      device.notifyDevice(device.value);
+    // Stage-3 shim: adopt self-described channels (or keep the synthesized schema).
+    applyDeclaredChannels(node, channels);
+    assignNodeIp(id, request.ip);
+
+    // Re-push stored value on a fresh boot, except for precision (value-owning) devices.
+    const isFirstPing = firstPing === "true";
+    if (isFirstPing && !PRECISION_CATEGORIES.includes(node.category)) {
+      node.notify(node.value);
     }
 
     response.send(true);
   });
 
-  // Client side app trying to interact with a device
+  // Dashboard / agent manually controls a device.
   app.post("/device-update", (request, response) => {
-    let device = devices.find((device) => device.id === request.body.id);
-    if (!device) {
-      return response.send(false);
-    }
+    const node = findNode(request.body.id);
+    if (!node) return response.send(false);
 
-    device
-      .manualTrigger(request.body.value)
+    const source =
+      request.body.source === "llm" || request.body.source === "voice"
+        ? request.body.source
+        : "dashboard";
+
+    // Accept either a whole-value write or a channel-addressed one (Stage 4). A
+    // dashboard channel write is a user override: lock `manual` like manualTrigger
+    // does (voice/llm channel nudges stay non-locking, per the Stage-4a design).
+    const write =
+      request.body.channel != null
+        ? node.setChannel(request.body.channel, request.body.value, source, source === "dashboard")
+        : node.manualTrigger(request.body.value, source);
+
+    write
       .then((success) => {
-        const clientData = buildClientDeviceData(device);
-        if (success) {
-          DevicesDB.set(device.id, clientData);
-        }
+        const clientData = buildClientNodeData(node);
+        if (success) persistNode(node);
         response.send(clientData);
       })
-      .catch(() => {
-        response.send(false);
-      });
+      .catch(() => response.send(false));
   });
 
   app.post("/device-blinds-configure", (request, response) => {
     const { id, action } = request.body;
-    let device: DeviceBlinds = devices.find(
-      (device) => device.id === id,
-    ) as DeviceBlinds;
-    let result = false;
-    if (device) {
-      result = true;
-      switch (action) {
-        case "spin":
-          device.spin();
-          break;
-        case "switch-direction":
-          device.switchDirection();
-          break;
-        case "home-position":
-          device.setHomeValue();
-          break;
-        case "set-limit":
-          device.setLimitValue();
-          break;
-      }
+    const node = findNode(id);
+    if (!(node instanceof NodeBlinds)) return response.send(false);
+
+    switch (action) {
+      case "spin":
+        node.spin();
+        break;
+      case "switch-direction":
+        node.switchDirection();
+        break;
+      case "home-position":
+        node.setHomeValue();
+        break;
+      case "set-limit":
+        node.setLimitValue();
+        break;
     }
-
-    response.send(result);
-  });
-
-  // Updates information about a device, this information live in DB
-  app.post("/devices-data-set", (request, response) => {
-    let device = devices.find((device) => device.id === request.body.id);
-    if (!device) return response.send(false);
-    if (!request.body.data) return response.send(false);
-
-    let incomingData = request.body.data;
-    mergeDeviceData(device, incomingData);
-    const clientData = buildClientDeviceData(device);
-    DevicesDB.set(device.id, clientData);
-    io.emit("device-update", clientData);
-    // Registry info (name/zone/category) may have changed — re-declare to memory.
-    emitDeviceDeclare(device);
     response.send(true);
   });
 
-  // Used to update device value data, different from "device-data-set", in
-  // which this endpoint updates read-only data from the device, and this data
-  // can be used to run self-automations
-  app.post("/device-value-set", (request, response) => {
-    const { id, value } = request.body;
-    let device = devices.find((device) => device.id === id);
-    mergeDeviceValue(device, value);
+  // Save device config (name, ranges, zone, etc.) — lives in the DB.
+  app.post("/devices-data-set", (request, response) => {
+    const node = findNode(request.body.id);
+    if (!node || !request.body.data) return response.send(false);
 
-    // Check if any of the updates values triggers
-    // an device effect
-    const updates = checkDeviceEffects(device);
-    if (updates) {
-      mergeDeviceValue(device, updates);
-      console.log("Auto triggered from value-set");
-      device.autoTrigger(device.value);
+    mergeNodeData(node, request.body.data);
+    const clientData = buildClientNodeData(node);
+    persistNode(node);
+    io.emit("device-update", clientData);
+    emitDeviceDeclare(node.toClientData()); // registry info may have changed
+    response.send(true);
+  });
+
+  // Device reports its own readings (e.g. cooler temps); may self-automate.
+  app.post("/device-value-set", (request, response) => {
+    const { id, value, channels } = request.body;
+    const node = findNode(id);
+    if (!node) return response.send(false);
+
+    if (Array.isArray(channels)) {
+      mergeChannelReadings(node, channels);
+    } else {
+      mergeNodeValue(node, value);
     }
 
-    // Update device data after checking if there where updates
-    const clientData = buildClientDeviceData(device);
-    DevicesDB.set(device.id, clientData);
+    // Cooler closed-loop: apply any fan/water change the new temps warrant.
+    const updates = coolerControl(node);
+    if (updates) {
+      mergeNodeValue(node, updates);
+      node.autoTrigger(node.value);
+    }
+
+    const clientData = buildClientNodeData(node);
+    persistNode(node);
     io.emit("device-update", clientData);
-    // Device-reported readings (e.g. cooler temps) are live telemetry for the LLM.
-    emitDeviceState(device, "device");
+    emitDeviceState(node.toClientData(), "device");
     response.send(true);
   });
 }

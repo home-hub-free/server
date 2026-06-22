@@ -13,10 +13,23 @@ import type DatabaseType from "better-sqlite3";
  * in sync automatically whenever the record is updated.
  *
  * Effects are relational (one row per automation rule) so the memory/LLM layer and
- * the dashboard can query rules by sensor/device without parsing a blob.
+ * the dashboard can query rules by sensor/device without parsing a blob. As of
+ * Stage 4b the row is the *normalized* `(node, channel, op)` contract itself
+ * (see effects-normalize.ts) — the stringly-typed `when_is`/`set_value_to_set`
+ * columns are gone, and migrate.ts rebuilds any legacy table in place.
  */
 export function applySchema(db: DatabaseType.Database): void {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS nodes (
+      id          TEXT PRIMARY KEY,
+      data        TEXT NOT NULL,
+      name        TEXT GENERATED ALWAYS AS (json_extract(data, '$.name')) VIRTUAL,
+      category    TEXT GENERATED ALWAYS AS (json_extract(data, '$.category')) VIRTUAL,
+      zone        TEXT GENERATED ALWAYS AS (json_extract(data, '$.zone')) VIRTUAL,
+      unit        TEXT GENERATED ALWAYS AS (json_extract(data, '$.unit')) VIRTUAL,
+      updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS devices (
       id              TEXT PRIMARY KEY,
       data            TEXT NOT NULL,
@@ -38,15 +51,18 @@ export function applySchema(db: DatabaseType.Database): void {
     );
 
     CREATE TABLE IF NOT EXISTS effects (
-      id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      when_id          TEXT NOT NULL,
-      when_type        TEXT NOT NULL,
-      when_is          TEXT NOT NULL,
-      set_id           TEXT NOT NULL,
-      set_value        TEXT NOT NULL,
-      set_value_to_set TEXT,
-      enabled          INTEGER NOT NULL DEFAULT 1,
-      updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      when_source  TEXT NOT NULL,            -- 'sensor' | 'time'
+      when_node_id TEXT,                     -- sensor only
+      when_channel TEXT,                     -- sensor only
+      when_op      TEXT,                     -- sensor only: 'eq' | 'gt' | 'lt'
+      when_value   TEXT,                     -- sensor only: JSON (boolean | number)
+      when_at      TEXT,                     -- time only: raw expression
+      set_node_id  TEXT NOT NULL,
+      set_channel  TEXT NOT NULL,
+      set_value    TEXT NOT NULL,            -- JSON (boolean | number)
+      enabled      INTEGER NOT NULL DEFAULT 1,
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS kv_config (
@@ -54,8 +70,10 @@ export function applySchema(db: DatabaseType.Database): void {
       value TEXT NOT NULL
     );
 
+    CREATE INDEX IF NOT EXISTS idx_nodes_zone    ON nodes(zone);
+    CREATE INDEX IF NOT EXISTS idx_nodes_category ON nodes(category);
     CREATE INDEX IF NOT EXISTS idx_devices_zone  ON devices(zone);
     CREATE INDEX IF NOT EXISTS idx_sensors_zone  ON sensors(zone);
-    CREATE INDEX IF NOT EXISTS idx_effects_when  ON effects(when_id);
+    CREATE INDEX IF NOT EXISTS idx_effects_when  ON effects(when_node_id);
   `);
 }

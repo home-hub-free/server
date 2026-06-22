@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { Device } from "./device.class";
+import { Node } from "./node.class";
 import dgram from "dgram";
 import { spawn } from "child_process";
 import { CameraRecorder } from "./camera.recorder";
@@ -23,11 +23,11 @@ export class CameraConnection {
   recorder: CameraRecorder;
 
   ws: Server;
-  camera: Device;
+  camera: Node;
   timeout: NodeJS.Timeout;
   onDisconnect: () => void;
 
-  constructor(_ws: Server, _camera: Device) {
+  constructor(_ws: Server, _camera: Node) {
     this.ws = _ws;
     this.camera = _camera;
 

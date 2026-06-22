@@ -9,8 +9,7 @@
  * Keep the payload compact and structured — every byte ends up in the prompt.
  */
 import type { Express } from "express";
-import { devices } from "../handlers/device.handler";
-import { sensors } from "../handlers/sensor.handler";
+import { deviceNodes, sensorNodes } from "../handlers/node.handler";
 import { EffectsDB } from "./effects-routes";
 
 interface DeviceSnap {
@@ -48,10 +47,10 @@ function dayPart(d: Date): "morning" | "afternoon" | "evening" | "night" {
 export function initStateRoutes(app: Express): void {
   app.get("/state", (_req, res) => {
     const now = new Date();
-    const deviceSnaps: DeviceSnap[] = devices.map((d) => ({
+    const deviceSnaps: DeviceSnap[] = deviceNodes().map((d) => ({
       id: d.id,
       name: d.name,
-      category: d.deviceCategory,
+      category: d.category,
       value: d.value,
       zone: d.zone || undefined,
       unit: d.unit || undefined,
@@ -61,11 +60,11 @@ export function initStateRoutes(app: Express): void {
       lastPingMs: d.lastPing ? now.getTime() - new Date(d.lastPing).getTime() : -1,
     }));
 
-    const sensorSnaps: SensorSnap[] = sensors.map((s: any) => ({
+    const sensorSnaps: SensorSnap[] = sensorNodes().map((s) => ({
       id: s.id,
       name: s.name,
       type: s.type,
-      sensorType: s.sensorType,
+      sensorType: s.category,
       value: s.value,
       zone: s.zone || undefined,
       unit: s.unit || undefined,
