@@ -83,6 +83,7 @@ export function buildClientSensorData(node: Node) {
     value: node.value,
     sensorType: node.category,
     ip: node.ip,
+    ...(node.zone ? { zone: node.zone } : {}),
   };
 }
 
