@@ -66,6 +66,17 @@ export function conditionMet(
   }
 }
 
+/** Does this enabled sensor rule's WHEN clause match the changed channel? The single
+ * source of truth for "this trigger fires this rule", shared by `evaluate` (which then
+ * additionally requires the target to change) and `isCoveredByEffect` (which doesn't). */
+function whenMatches(effect: NormalizedEffect, event: ChannelEvent): boolean {
+  if (effect.enabled === false) return false;
+  const when = effect.when;
+  if (when.source !== "sensor") return false;
+  if (when.nodeId !== event.nodeId || when.channel !== event.channel) return false;
+  return conditionMet(event.value, when.op, when.value);
+}
+
 /**
  * Given the full rule list and a channel that just changed, return the set-actions
  * to apply. Time rules are ignored (handled elsewhere). Disabled rules are skipped.
@@ -78,12 +89,7 @@ export function evaluate(
   const actions: SetAction[] = [];
 
   for (const effect of effects) {
-    if (effect.enabled === false) continue;
-
-    const when = effect.when;
-    if (when.source !== "sensor") continue;
-    if (when.nodeId !== event.nodeId || when.channel !== event.channel) continue;
-    if (!conditionMet(event.value, when.op, when.value)) continue;
+    if (!whenMatches(effect, event)) continue;
 
     // Only act when the target channel would actually change.
     const current = readChannel(effect.set.nodeId, effect.set.channel);
@@ -97,4 +103,22 @@ export function evaluate(
   }
 
   return actions;
+}
+
+/**
+ * Is this sensor change COVERED by an effect — i.e. does any enabled rule's WHEN
+ * clause match it? Distinct from `evaluate`: coverage is about the trigger matching a
+ * rule, NOT about an actuation firing. A motion→light rule still "covers" the motion
+ * edge even when the light is already on (so `evaluate` returns no action) — the agent
+ * crystallized that whole chain into a deterministic effect, so its reactive stream
+ * should ignore the trigger rather than re-reason its way to "no_action". Pure; the
+ * hub uses it to stamp a covered trigger `coveredByEffect:true` (dropped from the agent
+ * wake-path) WITHOUT altering its true `source` (docs/PATTERN_LIFECYCLE.md §D2) — the
+ * event is still persisted to memory with honest provenance.
+ */
+export function isCoveredByEffect(
+  effects: NormalizedEffect[],
+  event: ChannelEvent,
+): boolean {
+  return effects.some((effect) => whenMatches(effect, event));
 }

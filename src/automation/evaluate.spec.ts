@@ -1,4 +1,4 @@
-import { conditionMet, evaluate, ChannelReader } from "./evaluate";
+import { conditionMet, evaluate, isCoveredByEffect, ChannelReader } from "./evaluate";
 import type { EffectOp, NormalizedEffect } from "../db/effects-normalize";
 
 // Build a ChannelReader from a flat {"node:channel": value} map.
@@ -172,5 +172,38 @@ describe("evaluate — golden parity with the legacy engine", () => {
       { nodeId: "light-sala", channel: "power", value: true },
       { nodeId: "lamp-sala", channel: "power", value: true },
     ]);
+  });
+});
+
+describe("isCoveredByEffect — trigger-side suppression", () => {
+  const presenceRule = sensorEffect("pir-sala", "presence", "eq", true, "light-sala", "power", true);
+
+  it("covers a trigger that matches an enabled rule's WHEN clause", () => {
+    expect(isCoveredByEffect([presenceRule], { nodeId: "pir-sala", channel: "presence", value: true })).toBe(true);
+  });
+
+  it("covers even when the target already holds the value (where evaluate yields no action)", () => {
+    // The crux: motion edge fires the rule, but the light is already on, so `evaluate`
+    // returns []. Coverage must still be true so the trigger doesn't wake the agent.
+    const event = { nodeId: "pir-sala", channel: "presence", value: true };
+    expect(evaluate([presenceRule], event, reader({ "light-sala:power": true }))).toEqual([]);
+    expect(isCoveredByEffect([presenceRule], event)).toBe(true);
+  });
+
+  it("does NOT cover an unmatched condition (temp below threshold)", () => {
+    const tempRule = sensorEffect("th-sala", "temperature", "gt", 28, "cooler-sala", "fan", true);
+    expect(isCoveredByEffect([tempRule], { nodeId: "th-sala", channel: "temperature", value: 27 })).toBe(false);
+    expect(isCoveredByEffect([tempRule], { nodeId: "th-sala", channel: "temperature", value: 29.5 })).toBe(true);
+  });
+
+  it("does NOT cover a different node, a different channel, a disabled rule, or a time rule", () => {
+    const timeRule: NormalizedEffect = {
+      when: { source: "time", at: "sunset" }, set: { nodeId: "light-sala", channel: "power", value: true }, enabled: true,
+    };
+    const disabled = sensorEffect("pir-sala", "presence", "eq", true, "light-sala", "power", true, false);
+    expect(isCoveredByEffect([presenceRule], { nodeId: "pir-recamara", channel: "presence", value: true })).toBe(false);
+    expect(isCoveredByEffect([presenceRule], { nodeId: "pir-sala", channel: "motion", value: true })).toBe(false);
+    expect(isCoveredByEffect([disabled], { nodeId: "pir-sala", channel: "presence", value: true })).toBe(false);
+    expect(isCoveredByEffect([timeRule], { nodeId: "light-sala", channel: "power", value: true })).toBe(false);
   });
 });

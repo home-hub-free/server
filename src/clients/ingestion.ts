@@ -46,7 +46,23 @@ export type IngestionSource =
 // DeviceLike / SensorLike are the duck-typed inputs shared with the channel
 // projection — imported from ./channels to keep a single definition.
 
-export interface IngestionEvent {
+/**
+ * Reaction-plane hints + audit links carried alongside the TRUE provenance
+ * (`source`). The observation plane stores these but NEVER lets them override
+ * `source` (see docs/PATTERN_LIFECYCLE.md §D2). Both fields are optional and
+ * additive — existing consumers ignore them.
+ */
+export interface EventMeta {
+  /** Set when an enabled effect's WHEN matches this trigger (static coverage,
+   * D3). The reaction plane drops the event; memory keeps it for mining. A
+   * covered motion trigger stays `source:"device"` — we do NOT relabel it. */
+  coveredByEffect?: boolean;
+  /** On an effect-driven actuation (`source:"automation"`): the trigger that
+   * caused it, so memory/Discovery can reconstruct the exact chain (D6). */
+  causedBy?: { nodeId: string; channel: string; correlationId: string };
+}
+
+export interface IngestionEvent extends EventMeta {
   deviceId: string;
   zone: string;
   ts: string;
@@ -63,7 +79,7 @@ export interface IngestionEvent {
  * `homehub/<zone>/<nodeId>/<channel>` alongside the legacy blob event until
  * Node-RED is cut over.
  */
-export interface ChannelEvent {
+export interface ChannelEvent extends EventMeta {
   nodeId: string;
   zone: string;
   channel: string;
@@ -202,6 +218,9 @@ function publish(event: IngestionEvent): void {
     value: event.value,
     unit: event.unit,
     source: event.source,
+    // Reaction-plane hints / audit links — only present when set (D2/D6).
+    ...(event.coveredByEffect !== undefined ? { coveredByEffect: event.coveredByEffect } : {}),
+    ...(event.causedBy ? { causedBy: event.causedBy } : {}),
   });
   c.publish(topic, payload, { qos: 0 }, (err) => {
     if (err) log(EVENT_TYPES.error, [`ingestion: publish to ${topic} failed: ${err.message}`]);
@@ -243,6 +262,7 @@ function emitChannels(
   zone: string,
   channels: Channel[],
   source: IngestionSource,
+  meta: EventMeta = {},
 ): Channel[] {
   const ts = new Date().toISOString();
   const emitted: Channel[] = [];
@@ -259,6 +279,7 @@ function emitChannels(
         unit: ch.unit || "",
         source,
         ts,
+        ...meta,
       });
       emitted.push(ch);
     } catch (err) {
@@ -283,21 +304,24 @@ function emitNode(
   source: IngestionSource,
   channel: IngestionEvent["channel"],
   channels: Channel[],
+  meta: EventMeta = {},
 ): void {
-  const emitted = emitChannels(id, zone, channels, source);
+  const emitted = emitChannels(id, zone, channels, source, meta);
   if (channels.length === 0 || emitted.length > 0) {
-    emit({ deviceId: id, zone, ts: new Date().toISOString(), value, unit, source, channel });
+    emit({ deviceId: id, zone, ts: new Date().toISOString(), value, unit, source, channel, ...meta });
   }
 }
 
-/** An actor changed value (manual, auto, or boot-restore). */
-export function emitDeviceState(device: DeviceLike, source: IngestionSource): void {
-  emitNode(device.id, device.zone || "", device.value, device.unit || "", source, "state", deviceToChannels(device));
+/** An actor changed value (manual, auto, or boot-restore). `meta.causedBy` links
+ * an effect-driven actuation back to its trigger (D6). */
+export function emitDeviceState(device: DeviceLike, source: IngestionSource, meta: EventMeta = {}): void {
+  emitNode(device.id, device.zone || "", device.value, device.unit || "", source, "state", deviceToChannels(device), meta);
 }
 
-/** A sensor reported a reading / state transition. */
-export function emitSensorEvent(sensor: SensorLike, source: IngestionSource): void {
-  emitNode(sensor.id, sensor.zone || "", sensor.value, sensor.unit || "", source, "sensor", sensorToChannels(sensor));
+/** A sensor reported a reading / state transition. `meta.coveredByEffect` marks a
+ * trigger already crystallized into an effect (D2) — true provenance stays in `source`. */
+export function emitSensorEvent(sensor: SensorLike, source: IngestionSource, meta: EventMeta = {}): void {
+  emitNode(sensor.id, sensor.zone || "", sensor.value, sensor.unit || "", source, "sensor", sensorToChannels(sensor), meta);
 }
 
 /** A device joined or its registry info (name/zone/category) changed. */

@@ -2,7 +2,7 @@ import axios from "axios";
 import { EVENT_TYPES, log } from "../logger";
 import { dailyEvents } from "../handlers/daily-events.handler";
 import { io } from "../handlers/websockets.handler";
-import { emitDeviceState, emitSensorEvent, IngestionSource } from "../clients/ingestion";
+import { emitDeviceState, emitSensorEvent, EventMeta, IngestionSource } from "../clients/ingestion";
 import {
   ChannelSpec,
   buildSetRequests,
@@ -55,6 +55,14 @@ export class Node {
   static loadRecord: (id: string) => any = () => undefined;
   /** Automation hook — runs the effect orchestrator for a sensor channel change. */
   static automations: (node: Node, channel: string, value: boolean | number) => void = () => {};
+  /** Coverage hook — true when an enabled effect already maps this sensor channel
+   * change to a device action. A covered trigger is stamped `coveredByEffect:true`
+   * on the ingestion envelope (its `source` stays TRUE, e.g. `device`) so the
+   * reaction plane can drop the chain it already crystallized while the observation
+   * plane keeps the honest reading for pattern discovery (docs/PATTERN_LIFECYCLE.md
+   * §D2). Defaults false → no coverage stamp until wired (so the class unit-builds in
+   * isolation and pre-cutover behaviour holds). */
+  static isCovered: (node: Node, channel: string, value: boolean | number) => boolean = () => false;
 
   public id: string;
   public name: string;
@@ -126,9 +134,10 @@ export class Node {
     value: boolean | number,
     source: IngestionSource = "system",
     manual = false,
+    causedBy?: EventMeta["causedBy"],
   ): Promise<boolean> {
     if (manual) this.manual = true;
-    const result = this.notify(withChannelValue(this.category, this.value, key, value), source);
+    const result = this.notify(withChannelValue(this.category, this.value, key, value), source, { causedBy });
     if (!manual) return result;
     return result.then((success) => {
       if (this._timer) {
@@ -163,7 +172,7 @@ export class Node {
     });
   }
 
-  notify(value: any, source: IngestionSource = "system"): Promise<boolean> {
+  notify(value: any, source: IngestionSource = "system", meta: EventMeta = {}): Promise<boolean> {
     if (!this.ip) {
       log(EVENT_TYPES.error, [`Unable to update Node without IP address: ${this.name}`]);
       return Promise.resolve(false);
@@ -173,7 +182,7 @@ export class Node {
     const previous = this.value;
     this.value = value;
     io.emit("device-update", this.toClientData());
-    emitDeviceState(this.asDeviceLike(), source);
+    emitDeviceState(this.asDeviceLike(), source, meta);
 
     if (!this.channelAware) {
       return axios
@@ -186,17 +195,17 @@ export class Node {
           if (this.value === value) {
             this.value = previous;
             io.emit("device-update", this.toClientData());
-            emitDeviceState(this.asDeviceLike(), source);
+            emitDeviceState(this.asDeviceLike(), source, meta);
           }
           log(EVENT_TYPES.error, [`Node not found 404, ${this.name}, ${reason}`]);
           return false;
         });
     }
 
-    return this.notifyChannels(value, previous, source);
+    return this.notifyChannels(value, previous, source, meta);
   }
 
-  private notifyChannels(value: any, previous: any, source: IngestionSource): Promise<boolean> {
+  private notifyChannels(value: any, previous: any, source: IngestionSource, meta: EventMeta = {}): Promise<boolean> {
     const requests = buildSetRequests({
       ip: this.ip,
       category: this.category,
@@ -220,7 +229,7 @@ export class Node {
     ).then((results) => {
       if (results.some((ok) => !ok)) {
         io.emit("device-update", this.toClientData());
-        emitDeviceState(this.asDeviceLike(), source);
+        emitDeviceState(this.asDeviceLike(), source, meta);
       } else {
         log(EVENT_TYPES.device_triggered, [`Node triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`]);
       }
@@ -297,6 +306,14 @@ export class Node {
     }
   }
 
+  /** Coverage stamp for a sensor trigger: a change already mapped by an enabled
+   * effect is flagged `coveredByEffect` so the reaction plane drops the chain it
+   * crystallized — WITHOUT altering the trigger's true `source` (it stays `device`
+   * etc.), keeping the observation plane honest (docs/PATTERN_LIFECYCLE.md §D2). */
+  private coverage(channel: string, value: boolean | number): EventMeta {
+    return Node.isCovered(this, channel, value) ? { coveredByEffect: true } : {};
+  }
+
   private updateBooleanSensor(value: any, channel: string, source: IngestionSource) {
     const active = value === 1 || value === true;
     if (active) {
@@ -308,7 +325,7 @@ export class Node {
       if (this.value !== true) {
         this.value = true;
         io.emit("sensor-update", { id: this.id, value: true });
-        emitSensorEvent(this.asSensorLike(), source);
+        emitSensorEvent(this.asSensorLike(), source, this.coverage(channel, true));
         Node.automations(this, channel, true);
       }
     } else {
@@ -317,7 +334,7 @@ export class Node {
         this._graceTimer = null;
         this.value = false;
         io.emit("sensor-update", { id: this.id, value: false });
-        emitSensorEvent(this.asSensorLike(), source);
+        emitSensorEvent(this.asSensorLike(), source, this.coverage(channel, false));
         Node.automations(this, channel, false);
       }, TIME_TO_INACTIVE);
     }
@@ -326,13 +343,18 @@ export class Node {
   private updateValueSensor(value: any, sensorChannels: ChannelSpec[], source: IngestionSource) {
     this.value = value;
     io.emit("sensor-update", { id: this.id, value: this.value });
-    emitSensorEvent(this.asSensorLike(), source);
-    // Re-evaluate every sensor channel this reading carries (e.g. temperature +
-    // humidity from one "t:h" report).
-    sensorChannels.forEach((c) => {
-      const v = channelValue(this.category, c.key, this.value);
-      if (v !== undefined) Node.automations(this, c.key, v);
-    });
+    // A reading can carry several channels (e.g. temperature + humidity from one "t:h"
+    // report). They share ONE ingestion emit, so the emit is flagged coveredByEffect if
+    // ANY channel is covered. The `source` stays truthful regardless. (Edge case: a
+    // covered temp would also drop a co-reported humidity swing from the reaction plane —
+    // acceptable; the reading is still recorded to memory, with true provenance.)
+    const present = sensorChannels
+      .map((c) => ({ key: c.key, value: channelValue(this.category, c.key, this.value) }))
+      .filter((c) => c.value !== undefined) as { key: string; value: boolean | number }[];
+    const covered = present.some((c) => Node.isCovered(this, c.key, c.value));
+    emitSensorEvent(this.asSensorLike(), source, covered ? { coveredByEffect: true } : {});
+    // Re-evaluate every sensor channel this reading carries.
+    present.forEach((c) => Node.automations(this, c.key, c.value));
   }
 
   // ── Persistence / serialization ────────────────────────────────────────────
