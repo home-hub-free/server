@@ -60,6 +60,8 @@ export function primaryActuatorChannel(category: string | undefined): string {
       return "brightness";
     case "blinds":
       return "position";
+    case "presence-relay":
+      return "relay";
     case "evap-cooler":
       // Multi-channel; legacy cooler rules always carry valueToSet, so this is only
       // a defensive default.
@@ -171,7 +173,7 @@ export function normalizeAll(
 
 /** Cooler sub-keys are the only channels the legacy shape carried as `valueToSet`;
  * single-value devices wrote `device.value` directly (no `valueToSet`). */
-const MULTI_CHANNEL_KEYS = new Set(["fan", "water", "target"]);
+const MULTI_CHANNEL_KEYS = new Set(["fan", "water", "target", "relay"]);
 
 /** Inverse of `fieldToChannel`. */
 function channelToField(channel: string): string {

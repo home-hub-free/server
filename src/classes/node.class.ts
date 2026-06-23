@@ -8,6 +8,7 @@ import {
   buildSetRequests,
   channelSchema,
   channelValue,
+  isObjectBlobCategory,
   withChannelValue,
 } from "../clients/channels";
 
@@ -41,6 +42,7 @@ export type NodeCategory =
   | "camera"
   | "motion"
   | "presence"
+  | "presence-relay"
   | "temp/humidity";
 
 /** Categories that own their own value — the hub never pushes on first ping. */
@@ -105,6 +107,7 @@ export class Node {
     if (this.category === "evap-cooler") {
       return { fan: false, water: false, target: 26, ["unit-temp"]: 0, ["room-temp"]: 0 };
     }
+    if (this.category === "presence-relay") return { presence: false, relay: false };
     if (this.category === "temp/humidity") return "";
     if (this.type === "boolean") return false;
     return 0;
@@ -238,7 +241,7 @@ export class Node {
   }
 
   private revertChannel(channel: string | undefined, value: any, previous: any) {
-    if (channel && this.category === "evap-cooler") {
+    if (channel && isObjectBlobCategory(this.category)) {
       if (this.value && previous) this.value[channel] = previous[channel];
     } else if (this.value === value) {
       this.value = previous;
@@ -321,9 +324,11 @@ export class Node {
         clearTimeout(this._graceTimer);
         this._graceTimer = null;
       }
-      // Edge-trigger: only fire on a real false → true transition.
-      if (this.value !== true) {
-        this.value = true;
+      // Edge-trigger: only fire on a real false → true transition. Read/write the
+      // sensor channel through the codec so a multi-channel node (presence-relay)
+      // keeps its co-located actuator sub-value; scalar nodes are unaffected.
+      if (channelValue(this.category, channel, this.value) !== true) {
+        this.value = withChannelValue(this.category, this.value, channel, true);
         io.emit("sensor-update", { id: this.id, value: true });
         emitSensorEvent(this.asSensorLike(), source, this.coverage(channel, true));
         Node.automations(this, channel, true);
@@ -332,7 +337,7 @@ export class Node {
       if (this._graceTimer) clearTimeout(this._graceTimer);
       this._graceTimer = setTimeout(() => {
         this._graceTimer = null;
-        this.value = false;
+        this.value = withChannelValue(this.category, this.value, channel, false);
         io.emit("sensor-update", { id: this.id, value: false });
         emitSensorEvent(this.asSensorLike(), source, this.coverage(channel, false));
         Node.automations(this, channel, false);

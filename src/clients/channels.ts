@@ -98,6 +98,16 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
     case "presence":
       return [{ key: "presence", role: "sensor", kind: "boolean", writable: false }];
 
+    // Combo board: a PIR + an on-board relay on one MCU. One node, two channels —
+    // the relay is hub-authoritative (driven by a presence→relay effect, source
+    // "automation"), with a firmware fail-safe that closes it locally when the hub
+    // is unreachable (reported back as source "device"). See docs/DATA_CONTRACTS.md.
+    case "presence-relay":
+      return [
+        { key: "presence", role: "sensor", kind: "boolean", writable: false },
+        { key: "relay", role: "actuator", kind: "boolean", writable: true },
+      ];
+
     case "temp/humidity":
       return [
         { key: "temperature", role: "sensor", kind: "number", unit: "C", writable: false },
@@ -109,12 +119,22 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
   }
 }
 
+/** Categories whose legacy value blob is a per-channel object (cooler,
+ * presence-relay) — as opposed to a scalar or the temp/humidity "t:h" string. The
+ * codec keys into these by channel; the `/set` builder emits one request per
+ * changed channel. Single point of truth so a new object-blob category rides along
+ * everywhere the cooler does. */
+export function isObjectBlobCategory(category: string | undefined): boolean {
+  return category === "evap-cooler" || category === "presence-relay";
+}
+
 /** Read one channel's live value out of a legacy value blob, coerced to its kind.
- * Multi-channel devices (evap-cooler) key into the blob; the temp/humidity sensor
- * splits its "t:h" string; single-channel devices carry the value directly. */
+ * Object-blob devices (evap-cooler, presence-relay) key into the blob; the
+ * temp/humidity sensor splits its "t:h" string; single-channel devices carry the
+ * value directly. */
 function readChannelValue(category: string | undefined, spec: ChannelSpec, deviceValue: any): boolean | number {
   let raw: any;
-  if (category === "evap-cooler") {
+  if (isObjectBlobCategory(category)) {
     raw = (deviceValue ?? {})[spec.key];
   } else if (category === "temp/humidity") {
     const [temperature, humidity] = String(deviceValue ?? "").split(":");
@@ -153,7 +173,7 @@ export function withChannelValue(
   key: string,
   newValue: boolean | number,
 ): any {
-  if (category === "evap-cooler") {
+  if (isObjectBlobCategory(category)) {
     return { ...(deviceValue ?? {}), [key]: newValue };
   }
   if (category === "temp/humidity") {
@@ -244,7 +264,7 @@ export function buildSetRequests(opts: {
 
   const specs = (channelSchema(opts.category) ?? []).filter((s) => s.writable);
 
-  if (opts.category === "evap-cooler") {
+  if (isObjectBlobCategory(opts.category)) {
     const next = opts.value ?? {};
     const prev = opts.previous ?? {};
     return specs

@@ -184,4 +184,38 @@ describe("channel projection (Stage 1 data-contract redesign)", () => {
       expect(withChannelValue("temp/humidity", "23.5:10.5", "temperature", 24)).toBe("24:10.5");
     });
   });
+
+  describe("presence-relay combo node (one node, presence sensor + relay actuator)", () => {
+    it("projects both channels with their roles out of the blob", () => {
+      const channels = deviceToChannels({
+        id: "pr1",
+        deviceCategory: "presence-relay",
+        value: { presence: true, relay: false },
+      });
+      expect(channels).toEqual([
+        { key: "presence", role: "sensor", kind: "boolean", writable: false, value: true },
+        { key: "relay", role: "actuator", kind: "boolean", writable: true, value: false },
+      ]);
+    });
+
+    it("writing the presence sub-value never clobbers the co-located relay", () => {
+      const blob = { presence: false, relay: true };
+      const next = withChannelValue("presence-relay", blob, "presence", true);
+      expect(next).toEqual({ presence: true, relay: true });
+      expect(blob.presence).toBe(false); // input untouched
+      expect(channelValue("presence-relay", "relay", next)).toBe(true);
+    });
+
+    it("only the writable relay channel is actuated, encoded 1/0", () => {
+      const reqs = buildSetRequests({
+        ip: "10.0.0.5",
+        category: "presence-relay",
+        channelAware: true,
+        previous: { presence: true, relay: false },
+        value: { presence: true, relay: true },
+      });
+      // presence is a sensor (not writable) → never sent; relay changed → 1.
+      expect(reqs).toEqual([{ url: "http://10.0.0.5/set?ch=relay&value=1", channel: "relay" }]);
+    });
+  });
 });
