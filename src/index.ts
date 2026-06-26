@@ -12,6 +12,7 @@ import {
   initDailyEvents,
 } from "./handlers/daily-events.handler";
 
+import { initAuthRoutes } from "./routes/auth-routes";
 import { initSensorRoutes } from "./routes/sensor-routes";
 import { initDeviceRoutes } from "./routes/device-routes";
 import { initStateRoutes } from "./routes/state-routes";
@@ -63,6 +64,7 @@ initWebSockets(server);
 // Producer-only ingestion seam → MQTT (no-op unless INGESTION_ENABLED=true).
 initIngestion();
 
+initAuthRoutes(app);
 initSensorRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);

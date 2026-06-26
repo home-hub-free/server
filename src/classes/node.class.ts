@@ -149,10 +149,11 @@ export class Node {
     source: IngestionSource = "system",
     manual = false,
     causedBy?: EventMeta["causedBy"],
+    actor?: EventMeta["actor"],
   ): Promise<boolean> {
     if (manual) this.manual = true;
     const folded = withChannelValue(this.category, this.value, key, value);
-    const result = this.notify(reconcileValueWrite(this.category, this.value, folded), source, { causedBy });
+    const result = this.notify(reconcileValueWrite(this.category, this.value, folded), source, { causedBy, actor });
     if (!manual) return result;
     return result.then((success) => {
       if (this._timer) {
@@ -173,12 +174,16 @@ export class Node {
     }
   }
 
-  async manualTrigger(value: any, source: IngestionSource = "dashboard"): Promise<boolean> {
+  async manualTrigger(
+    value: any,
+    source: IngestionSource = "dashboard",
+    actor?: EventMeta["actor"],
+  ): Promise<boolean> {
     // Only a genuine user action grabs the wheel. Agent (llm/voice) and system
     // writes actuate without latching `manual`, so automations keep applying —
     // mirrors the source-aware lock setChannel already does for channel writes.
     if (source === "dashboard") this.manual = true;
-    return this.notify(reconcileValueWrite(this.category, this.value, value), source).then((success) => {
+    return this.notify(reconcileValueWrite(this.category, this.value, value), source, { actor }).then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);
         this._timer = null;

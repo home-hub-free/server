@@ -11,6 +11,7 @@ import {
   mergeNodeData,
   persistNode,
 } from "../handlers/node.handler";
+import { requireAuth } from "../auth/middleware";
 
 // Active calibration polls, keyed by node id, so a re-trigger (or a 409 from a
 // still-running pass) never spawns a second poller for the same sensor.
@@ -97,7 +98,7 @@ export function initSensorRoutes(app: Express) {
   });
 
   // Save sensor config (name, zone, etc.) — lives in the DB.
-  app.post("/sensors-data-set", (request, response) => {
+  app.post("/sensors-data-set", requireAuth, (request, response) => {
     const node = findNode(request.body.id);
     if (!node || !request.body.data) return response.send(false);
 
@@ -108,7 +109,7 @@ export function initSensorRoutes(app: Express) {
   });
 
   // Trigger calibration mode on a presence sensor.
-  app.post("/sensor-calibrate", async (request, response) => {
+  app.post("/sensor-calibrate", requireAuth, async (request, response) => {
     const node = findNode(request.body.id);
     if (!node || !node.ip) {
       return response.status(400).send({ error: "Sensor not found or IP unknown" });

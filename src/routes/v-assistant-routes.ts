@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import { assistant, VAssistantDB } from '../v-assistant/v-assistant.class';
 import { readCalendars } from '../handlers/google-calendar.handler';
+import { requireAuth } from '../auth/middleware';
 
 export function initVAssistantRoutes(app: Express) {
 
@@ -39,7 +40,7 @@ export function initVAssistantRoutes(app: Express) {
     });
   });
 
-  app.post("/update-house-data", (request, response) => {
+  app.post("/update-house-data", requireAuth, (request, response) => {
     const { property, value } = request.body;
     const houseData = VAssistantDB.get('houseData') || {};
     if (value === 'null') {

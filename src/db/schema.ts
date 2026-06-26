@@ -106,6 +106,26 @@ export function applySchema(db: DatabaseType.Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- Household members + login sessions. The hub owns these because it is the
+    -- always-on control plane and the single front door for the dashboard. Each
+    -- user carries a prefs blob (JSON, e.g. tone) the LLM agent reads so it can
+    -- address the person by name and adapt its replies. Passwords are stored as a
+    -- scrypt hash ('salt:key' hex, see src/auth/passwords.ts) -- never plaintext.
+    CREATE TABLE IF NOT EXISTS users (
+      id            TEXT PRIMARY KEY,           -- slug, e.g. 'david'
+      username      TEXT NOT NULL UNIQUE,
+      display_name  TEXT NOT NULL,
+      pass_hash     TEXT NOT NULL,              -- scrypt 'salt:derivedKey' hex
+      prefs         TEXT NOT NULL DEFAULT '{}', -- JSON: { tone }
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    -- Opaque bearer tokens minted on login; deleted on logout. No expiry (home LAN).
+    CREATE TABLE IF NOT EXISTS sessions (
+      token       TEXT PRIMARY KEY,            -- 32-byte hex
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_nodes_zone    ON nodes(zone);
     CREATE INDEX IF NOT EXISTS idx_nodes_category ON nodes(category);
     CREATE INDEX IF NOT EXISTS idx_devices_zone  ON devices(zone);
@@ -114,6 +134,7 @@ export function applySchema(db: DatabaseType.Database): void {
     CREATE INDEX IF NOT EXISTS idx_effect_conds_arm ON effect_conditions(arm_id);
     CREATE INDEX IF NOT EXISTS idx_timers_status ON timers(status);
     CREATE INDEX IF NOT EXISTS idx_timers_fire   ON timers(fire_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   `);
 
   // The `effects` trigger index targets a dynamic-shape column (`trigger_node`).

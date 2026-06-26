@@ -60,6 +60,10 @@ export interface EventMeta {
   /** On an effect-driven actuation (`source:"automation"`): the trigger that
    * caused it, so memory/Discovery can reconstruct the exact chain (D6). */
   causedBy?: { nodeId: string; channel: string; correlationId: string };
+  /** Which household member drove a `source:"dashboard"` action — so the
+   * memory/LLM layer records *who* did a manual write, not just that the UI did.
+   * Additive alongside the unchanged `source` (downstream ignores unknown fields). */
+  actor?: { id: string; name: string };
 }
 
 export interface IngestionEvent extends EventMeta {

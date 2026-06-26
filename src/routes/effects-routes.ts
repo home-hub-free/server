@@ -4,6 +4,7 @@ import { NormalizedEffect, normalizeEffect } from "../db/effects-normalize";
 import type { Effect } from "../automation/effect.model";
 import { flatToEffect, parseDynamicEffect } from "../automation/effect-compat";
 import { nodes } from "../handlers/node.handler";
+import { requireAuth } from "../auth/middleware";
 
 export const EffectsDB = new EffectsRepo();
 
@@ -98,7 +99,7 @@ export function initEffectsRoutes(app: Express) {
 
   // Replace the full rule list. Each item is a dynamic `trigger + arms` rule or a flat
   // `when → set` DTO (back-compat); both are stored as dynamic Effects.
-  app.post("/set-effects", (request, response) => {
+  app.post("/set-effects", requireAuth, (request, response) => {
     const { effects } = request.body;
     EffectsDB.setAll((effects || []).map(toEffect));
     onEffectsChanged();
@@ -106,7 +107,7 @@ export function initEffectsRoutes(app: Express) {
   });
 
   // Append one rule (dynamic `trigger + arms` or a flat DTO).
-  app.post("/set-effect", (request, response) => {
+  app.post("/set-effect", requireAuth, (request, response) => {
     const { effect } = request.body;
     EffectsDB.add(toEffect(effect));
     onEffectsChanged();

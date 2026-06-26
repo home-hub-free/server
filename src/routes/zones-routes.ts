@@ -1,6 +1,7 @@
 import { Express } from "express";
 import { VAssistantDB } from "../v-assistant/v-assistant.class";
 import { nodes } from "../handlers/node.handler";
+import { requireAuth } from "../auth/middleware";
 
 /**
  * Zones registry — the house's canonical room list, the typo-free source for the
@@ -45,7 +46,7 @@ export function initZonesRoutes(app: Express) {
 
   // Replace the whole registry (mirrors /set-effects). Returns the normalized list
   // so the client can adopt exactly what was stored.
-  app.post("/set-zones", (request, response) => {
+  app.post("/set-zones", requireAuth, (request, response) => {
     const zones = normalizeZones(request.body?.zones);
     VAssistantDB.set(ZONES_KEY, zones);
     response.json(zones);

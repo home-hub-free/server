@@ -16,8 +16,9 @@ import {
   persistNode,
 } from "../handlers/node.handler";
 import { io } from "../handlers/websockets.handler";
-import { emitDeviceDeclare, emitDeviceState } from "../clients/ingestion";
+import { emitDeviceDeclare, emitDeviceState, EventMeta } from "../clients/ingestion";
 import { NodeBlinds } from "../classes/node.class";
+import { requireAuth, requireActor } from "../auth/middleware";
 
 export function initDeviceRoutes(app: Express) {
   app.get("/get-devices", (request, response) => {
@@ -56,8 +57,9 @@ export function initDeviceRoutes(app: Express) {
     response.send(true);
   });
 
-  // Dashboard / agent manually controls a device.
-  app.post("/device-update", (request, response) => {
+  // Dashboard / agent manually controls a device. Requires a logged-in user so
+  // the action can be attributed (the ESP fleet never hits this route).
+  app.post("/device-update", requireActor, (request, response) => {
     const node = findNode(request.body.id);
     if (!node) return response.send(false);
 
@@ -65,6 +67,13 @@ export function initDeviceRoutes(app: Express) {
       request.body.source === "llm" || request.body.source === "voice"
         ? request.body.source
         : "dashboard";
+
+    // Attribute a dashboard write to the signed-in member so memory/LLM records
+    // *who* acted. Agent (llm/voice) writes carry their own provenance via source.
+    const actor: EventMeta["actor"] =
+      source === "dashboard" && request.user
+        ? { id: request.user.id, name: request.user.displayName }
+        : undefined;
 
     // Accept either a whole-value write or a channel-addressed one (Stage 4). A
     // dashboard channel write is a user override: lock `manual` like manualTrigger
@@ -78,8 +87,8 @@ export function initDeviceRoutes(app: Express) {
     const latchManual = source === "dashboard" && channelRole !== "setting";
     const write =
       channelKey != null
-        ? node.setChannel(channelKey, request.body.value, source, latchManual)
-        : node.manualTrigger(request.body.value, source);
+        ? node.setChannel(channelKey, request.body.value, source, latchManual, undefined, actor)
+        : node.manualTrigger(request.body.value, source, actor);
 
     write
       .then((success) => {
@@ -90,7 +99,7 @@ export function initDeviceRoutes(app: Express) {
       .catch(() => response.send(false));
   });
 
-  app.post("/device-blinds-configure", (request, response) => {
+  app.post("/device-blinds-configure", requireAuth, (request, response) => {
     const { id, action } = request.body;
     const node = findNode(id);
     if (!(node instanceof NodeBlinds)) return response.send(false);
@@ -113,7 +122,7 @@ export function initDeviceRoutes(app: Express) {
   });
 
   // Save device config (name, ranges, zone, etc.) — lives in the DB.
-  app.post("/devices-data-set", (request, response) => {
+  app.post("/devices-data-set", requireAuth, (request, response) => {
     const node = findNode(request.body.id);
     if (!node || !request.body.data) return response.send(false);
 
