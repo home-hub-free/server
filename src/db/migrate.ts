@@ -5,7 +5,8 @@ import { applySchema } from "./schema";
 import { DevicesRepo } from "./devices.repo";
 import { SensorsRepo } from "./sensors.repo";
 import { EffectsRepo, IEffect } from "./effects.repo";
-import { CategoryResolver, normalizeAll } from "./effects-normalize";
+import { CategoryResolver, EffectOp, NormalizedEffect, normalizeAll } from "./effects-normalize";
+import { flatListToEffects } from "../automation/effect-compat";
 import { ConfigRepo } from "./config.repo";
 import { NodesRepo } from "./nodes.repo";
 
@@ -91,6 +92,7 @@ export function importLegacyJson(): void {
   // before any normalized row is written.
   migrateToNodes();
   migrateEffectsToNormalized();
+  migrateEffectsToDynamic();
   importLegacyEffectsJson();
 }
 
@@ -180,6 +182,87 @@ export function migrateEffectsToNormalized(): void {
   rebuild();
   log(EVENT_TYPES.info, [
     `Migrated ${normalized.length} effect(s) to normalized storage (Stage 4b)`,
+  ]);
+}
+
+/**
+ * EFFECTS_DYNAMIC Stage 1 migration: rebuild a flat-normalized `effects` table
+ * (`when_source`/`when_*`/`set_*`, the Stage-4b shape) into the dynamic `trigger + arms`
+ * storage (effects + effect_arms + effect_conditions; docs/EFFECTS_DYNAMIC.md §5). Each
+ * flat rule becomes a single-arm `Effect` via the flat→dynamic adapter (§7: the small
+ * deployed rule set is re-authored, not carried forward as a dual shape).
+ *
+ * Runs AFTER migrateEffectsToNormalized so an ancient stringly table (already lifted to
+ * the dynamic shape by that step's applySchema) is detected as dynamic and skipped here.
+ * Idempotent: a no-op once `effects` is the dynamic shape (has `trigger_source`).
+ * Irreversible (schema mutation), so it snapshots a verified `.bak` first and aborts if
+ * that fails.
+ */
+export function migrateEffectsToDynamic(): void {
+  const cols = db.prepare("PRAGMA table_info(effects)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "trigger_source")) return; // already dynamic
+  if (!cols.some((c) => c.name === "when_source")) return; // not the flat-normalized shape
+
+  // Read the flat-normalized rows directly into the DTO the adapter consumes.
+  const rows = db
+    .prepare(
+      `SELECT when_source, when_node_id, when_channel, when_op, when_value, when_at,
+              set_node_id, set_channel, set_value, enabled
+       FROM effects ORDER BY id`,
+    )
+    .all() as {
+    when_source: string;
+    when_node_id: string | null;
+    when_channel: string | null;
+    when_op: string | null;
+    when_value: string | null;
+    when_at: string | null;
+    set_node_id: string;
+    set_channel: string;
+    set_value: string;
+    enabled: number;
+  }[];
+  const flat: NormalizedEffect[] = rows.map((r) =>
+    r.when_source === "time"
+      ? {
+          when: { source: "time", at: r.when_at ?? "" },
+          set: { nodeId: r.set_node_id, channel: r.set_channel, value: JSON.parse(r.set_value) },
+          enabled: r.enabled !== 0,
+        }
+      : {
+          when: {
+            source: "sensor",
+            nodeId: String(r.when_node_id ?? ""),
+            channel: String(r.when_channel ?? ""),
+            op: (r.when_op ?? "eq") as EffectOp,
+            value: JSON.parse(r.when_value ?? "null"),
+          },
+          set: { nodeId: r.set_node_id, channel: r.set_channel, value: JSON.parse(r.set_value) },
+          enabled: r.enabled !== 0,
+        },
+  );
+
+  // Verified .bak BEFORE the destructive change (VACUUM INTO can't run in a transaction).
+  if (DB_FILE !== ":memory:") {
+    const backup = `${DB_FILE}.pre-dynamic-${Date.now()}.bak`;
+    try {
+      db.exec(`VACUUM INTO '${backup.replace(/'/g, "''")}'`);
+      log(EVENT_TYPES.info, [`Backed up DB to ${backup} before dynamic-effects migration`]);
+    } catch (err) {
+      log(EVENT_TYPES.error, [`Aborting dynamic-effects migration — backup failed: ${err}`]);
+      return;
+    }
+  }
+
+  const effects = flatListToEffects(flat);
+  const rebuild = db.transaction(() => {
+    db.exec("DROP TABLE effects");
+    applySchema(db); // recreates effects + effect_arms + effect_conditions (other tables no-op)
+    new EffectsRepo().setAll(effects);
+  });
+  rebuild();
+  log(EVENT_TYPES.info, [
+    `Migrated ${effects.length} effect(s) to dynamic trigger+arms storage (EFFECTS_DYNAMIC Stage 1)`,
   ]);
 }
 

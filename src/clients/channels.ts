@@ -128,6 +128,48 @@ export function isObjectBlobCategory(category: string | undefined): boolean {
   return category === "evap-cooler" || category === "presence-relay";
 }
 
+/**
+ * Reconcile a (possibly partial) value write against the node's current value.
+ *
+ * For **object-blob** categories (evap-cooler, presence-relay) a whole-value write
+ * is MERGED into the previous blob rather than replacing it, so a write that omits
+ * a channel (e.g. a dashboard fan toggle that doesn't carry `target`) keeps the
+ * prior value of every absent channel. This is the structural fix for the cooler
+ * losing its `target`/`water` to a partial overwrite. Null/undefined incoming
+ * channels are ignored so they can't clobber a good prior value.
+ *
+ * Ranged numeric channels (the cooler's `target`, 16–30 °C) are CLAMPED into their
+ * schema range; a non-finite incoming value (NaN/garbage) is dropped in favour of
+ * the prior value (or omitted entirely if there was none). Sensor temps have no
+ * range and pass through untouched.
+ *
+ * Scalar (non-object-blob) categories pass the value through unchanged — a
+ * whole-value write there genuinely IS the whole value, so replace is correct.
+ */
+export function reconcileValueWrite(category: string | undefined, previous: any, incoming: any): any {
+  if (!isObjectBlobCategory(category)) return incoming;
+
+  const base: any = previous && typeof previous === "object" ? { ...previous } : {};
+  if (incoming && typeof incoming === "object") {
+    for (const [k, v] of Object.entries(incoming)) {
+      if (v !== null && v !== undefined) base[k] = v;
+    }
+  }
+
+  for (const spec of channelSchema(category) ?? []) {
+    if (spec.kind !== "number" || !spec.range || base[spec.key] == null) continue;
+    const n = Number(base[spec.key]);
+    if (Number.isFinite(n)) {
+      base[spec.key] = Math.min(spec.range.max, Math.max(spec.range.min, n));
+    } else if (previous && typeof previous === "object" && previous[spec.key] != null) {
+      base[spec.key] = previous[spec.key];
+    } else {
+      delete base[spec.key];
+    }
+  }
+  return base;
+}
+
 /** Read one channel's live value out of a legacy value blob, coerced to its kind.
  * Object-blob devices (evap-cooler, presence-relay) key into the blob; the
  * temp/humidity sensor splits its "t:h" string; single-channel devices carry the
@@ -192,7 +234,7 @@ function toNumber(v: any): number | null {
 }
 
 /** Coerce a possibly-stringy boolean ('false'/0/'') to a real boolean. */
-function toBoolean(v: any): boolean {
+export function toBoolean(v: any): boolean {
   return v === true || v === 1 || v === "true" || v === "1";
 }
 

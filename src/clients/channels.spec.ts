@@ -1,4 +1,4 @@
-import { buildSetRequests, channelValue, deviceToChannels, sensorToChannels, withChannelValue } from "./channels";
+import { buildSetRequests, channelValue, deviceToChannels, reconcileValueWrite, sensorToChannels, withChannelValue } from "./channels";
 
 describe("channel projection (Stage 1 data-contract redesign)", () => {
   describe("deviceToChannels", () => {
@@ -216,6 +216,48 @@ describe("channel projection (Stage 1 data-contract redesign)", () => {
       });
       // presence is a sensor (not writable) → never sent; relay changed → 1.
       expect(reqs).toEqual([{ url: "http://10.0.0.5/set?ch=relay&value=1", channel: "relay" }]);
+    });
+  });
+
+  describe("reconcileValueWrite (whole-value write integrity — the cooler target-loss fix)", () => {
+    const full = { fan: false, water: false, target: 26, "unit-temp": 20, "room-temp": 24 };
+
+    it("merges a partial cooler write into the prior blob — absent channels survive", () => {
+      // A dashboard fan toggle posts {fan:true} only. target/water/temps must persist.
+      const next = reconcileValueWrite("evap-cooler", full, { fan: true });
+      expect(next).toEqual({ fan: true, water: false, target: 26, "unit-temp": 20, "room-temp": 24 });
+    });
+
+    it("a write that omits target keeps the prior target (the original bug)", () => {
+      const next = reconcileValueWrite("evap-cooler", full, { fan: false, "unit-temp": 21, "room-temp": 24 });
+      expect(next.target).toBe(26);
+    });
+
+    it("null/undefined incoming channels never clobber a good prior value", () => {
+      const next = reconcileValueWrite("evap-cooler", full, { target: null, water: undefined });
+      expect(next.target).toBe(26);
+      expect(next.water).toBe(false);
+    });
+
+    it("clamps an in-write target into the schema range [16,30]", () => {
+      expect(reconcileValueWrite("evap-cooler", full, { target: 45 }).target).toBe(30);
+      expect(reconcileValueWrite("evap-cooler", full, { target: 5 }).target).toBe(16);
+    });
+
+    it("a non-finite target falls back to the prior value, not 0", () => {
+      const next = reconcileValueWrite("evap-cooler", full, { target: "garbage" as any });
+      expect(next.target).toBe(26);
+    });
+
+    it("does not clamp the unranged sensor temps", () => {
+      const next = reconcileValueWrite("evap-cooler", full, { "unit-temp": 45, "room-temp": -5 });
+      expect(next["unit-temp"]).toBe(45);
+      expect(next["room-temp"]).toBe(-5);
+    });
+
+    it("scalar (non-object-blob) categories replace as before", () => {
+      expect(reconcileValueWrite("light", true, false)).toBe(false);
+      expect(reconcileValueWrite("dimmable-light", 80, 40)).toBe(40);
     });
   });
 });

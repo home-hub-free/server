@@ -180,6 +180,17 @@ function cleanup() {
   assistant.autoForecasted.morning = false;
   assistant.autoForecasted.afternoon = false;
   assistant.autoForecasted.evening = false;
+
+  // Natural reset of manual overrides (docs/EFFECTS_DYNAMIC.md §8/Stage 3): a user's
+  // manual control "wins" for the rest of the day, then automations resume the next day.
+  // Without this the lock — which dynamic effects now respect — would be permanent.
+  let released = 0;
+  nodes.forEach((node) => {
+    if (node.releaseManual()) released++;
+  });
+  if (released > 0) {
+    log(EVENT_TYPES.daily_event, [`Released ${released} manual lock(s) — automations resume`]);
+  }
 }
 
 export function getSunsetTimeStamp() {

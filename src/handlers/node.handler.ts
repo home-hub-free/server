@@ -1,6 +1,7 @@
 import { Request } from "express";
 import { log, EVENT_TYPES } from "../logger";
 import { Node, NodeBlinds, NodeCategory, PRECISION_CATEGORIES } from "../classes/node.class";
+import { isObjectBlobCategory, reconcileValueWrite, toBoolean } from "../clients/channels";
 import { NodesRepo } from "../db/nodes.repo";
 import { computeCoolerUpdates } from "../automation/cooler-controller";
 import { createStorageStream } from "./camera-storage-handler";
@@ -76,11 +77,18 @@ export function buildClientNodeData(node: Node) {
 
 /** Sensor-shaped client payload (matches the legacy buildClientSensorData). */
 export function buildClientSensorData(node: Node) {
+  // Defensive normalization at the client seam: a scalar boolean sensor always
+  // ships a real boolean, so the dashboard's `value === true` never trips on a
+  // legacy numeric (0/1) — even before a server restart re-normalizes the node.
+  const value =
+    node.type === "boolean" && !isObjectBlobCategory(node.category)
+      ? toBoolean(node.value)
+      : node.value;
   return {
     id: node.id,
     type: node.type,
     name: node.name,
-    value: node.value,
+    value,
     sensorType: node.category,
     ip: node.ip,
     ...(node.zone ? { zone: node.zone } : {}),
@@ -119,15 +127,12 @@ export function mergeChannelReadings(node: Node, channels: any[]): void {
   });
 }
 
-/** Merge a partial value object into a node's value blob (cooler telemetry). */
+/** Merge a partial value object into a node's value blob (cooler telemetry).
+ * Routes through `reconcileValueWrite` so object-blob categories merge (never drop
+ * absent channels) and ranged settings (`target`) are clamped — the same integrity
+ * guard the Node write paths use, applied to the device-telemetry route. */
 export function mergeNodeValue(node: Node, value: any): void {
-  if (value && typeof value === "object" && node.value && typeof node.value === "object") {
-    Object.keys(value).forEach((key) => {
-      node.value[key] = value[key];
-    });
-  } else {
-    node.value = value;
-  }
+  node.value = reconcileValueWrite(node.category, node.value, value);
 }
 
 /**

@@ -1,6 +1,8 @@
 import { Express } from "express";
 import { EffectsRepo, IEffect } from "../db/effects.repo";
 import { NormalizedEffect, normalizeEffect } from "../db/effects-normalize";
+import type { Effect } from "../automation/effect.model";
+import { flatToEffect, parseDynamicEffect } from "../automation/effect-compat";
 import { nodes } from "../handlers/node.handler";
 
 export const EffectsDB = new EffectsRepo();
@@ -57,8 +59,34 @@ function toNormalized(raw: any): NormalizedEffect {
   return normalizeEffect(legacy, resolveCategory);
 }
 
+/**
+ * Accept either shape and return a stored dynamic `Effect`:
+ *   - a dynamic `{ trigger, arms }` rule (LLM `create_effect`, or the dashboard once it
+ *     speaks the new shape) → parsed natively, preserving multi-arm/conditions;
+ *   - a flat `when → set` DTO / legacy `IEffect` → normalized, then lifted to a single-arm
+ *     Effect (back-compat for the current dashboard until its UI is updated).
+ */
+function toEffect(raw: any): Effect {
+  if (raw?.trigger && raw?.arms) return parseDynamicEffect(raw, parseMaybe);
+  return flatToEffect(toNormalized(raw));
+}
+
+// Rule-change hook — invoked after any write so the time-trigger scheduler can re-arm to
+// the new earliest boundary (EFFECTS_DYNAMIC §3.2). Wired in index.ts to rearmTimeEffects;
+// a settable hook avoids an effects-routes ↔ time-scheduler import cycle.
+let onEffectsChanged: () => void = () => {};
+export function setOnEffectsChanged(fn: () => void): void {
+  onEffectsChanged = fn;
+}
+
 export function initEffectsRoutes(app: Express) {
-  // Normalized contract — the canonical view consumed by the dashboard + LLM.
+  // Dynamic contract (EFFECTS_DYNAMIC §2) — whole `trigger + arms` rules. The canonical
+  // view once the dashboard/LLM speak it natively.
+  app.get("/get-effects-dynamic", (request, response) => {
+    response.send(EffectsDB.getAll());
+  });
+
+  // Normalized flat view — single-arm rules only (multi-arm rules have no flat form).
   app.get("/get-effects-normalized", (request, response) => {
     response.send(EffectsDB.getNormalized());
   });
@@ -68,17 +96,20 @@ export function initEffectsRoutes(app: Express) {
     response.send(EffectsDB.get("effects") || []);
   });
 
-  // Replace the full rule list.
+  // Replace the full rule list. Each item is a dynamic `trigger + arms` rule or a flat
+  // `when → set` DTO (back-compat); both are stored as dynamic Effects.
   app.post("/set-effects", (request, response) => {
     const { effects } = request.body;
-    EffectsDB.setNormalized((effects || []).map(toNormalized));
+    EffectsDB.setAll((effects || []).map(toEffect));
+    onEffectsChanged();
     response.send(true);
   });
 
-  // Append one rule.
+  // Append one rule (dynamic `trigger + arms` or a flat DTO).
   app.post("/set-effect", (request, response) => {
     const { effect } = request.body;
-    EffectsDB.addNormalized(toNormalized(effect));
+    EffectsDB.add(toEffect(effect));
+    onEffectsChanged();
     response.send(true);
   });
 }

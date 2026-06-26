@@ -69,9 +69,16 @@ export function initDeviceRoutes(app: Express) {
     // Accept either a whole-value write or a channel-addressed one (Stage 4). A
     // dashboard channel write is a user override: lock `manual` like manualTrigger
     // does (voice/llm channel nudges stay non-locking, per the Stage-4a design).
+    // EXCEPTION: a `setting`-role channel (e.g. the cooler's `target`) is a
+    // setpoint, NOT an actuator override — latching `manual` there would freeze the
+    // closed loop that's supposed to track the new target. So settings never latch.
+    const channelKey = request.body.channel;
+    const channelRole =
+      channelKey != null ? (node.channels ?? []).find((c) => c.key === channelKey)?.role : undefined;
+    const latchManual = source === "dashboard" && channelRole !== "setting";
     const write =
-      request.body.channel != null
-        ? node.setChannel(request.body.channel, request.body.value, source, source === "dashboard")
+      channelKey != null
+        ? node.setChannel(channelKey, request.body.value, source, latchManual)
         : node.manualTrigger(request.body.value, source);
 
     write

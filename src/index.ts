@@ -20,11 +20,14 @@ import { initIngestion } from "./clients/ingestion";
 import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
-import { initEffectsRoutes } from "./routes/effects-routes";
+import { initEffectsRoutes, setOnEffectsChanged } from "./routes/effects-routes";
 import { initZonesRoutes } from "./routes/zones-routes";
 import { wireAutomations } from "./automation/wire";
+import { initTimeEffects, rearmTimeEffects } from "./automation/time-scheduler-driver";
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
 import { initDeviceLogRoutes } from "./routes/device-log-routes";
+import { initTimerRoutes } from "./routes/timer-routes";
+import { initTimers } from "./timers/scheduler";
 import { Bonjour } from "bonjour-service";
 import fs from "fs";
 
@@ -65,12 +68,18 @@ initDeviceRoutes(app);
 initEffectsRoutes(app);
 // Wire the Node automation hook now that the registry + effects store exist.
 wireAutomations();
+// Arm the time-trigger one-shot scheduler, and re-arm it whenever the rule set changes.
+setOnEffectsChanged(() => rearmTimeEffects());
+initTimeEffects();
 initStateRoutes(app);
 initVAssistantRoutes(app);
 initZonesRoutes(app);
 ensureFirmwareStore();
 initFirmwareRoutes(app);
 initDeviceLogRoutes(app);
+initTimerRoutes(app);
+// Always-on driver for user timers/reminders — fires due ones through the house speaker.
+initTimers();
 
 /**
  * Control-plane state now lives in SQLite (db/home-hub.db), opened + migrated by

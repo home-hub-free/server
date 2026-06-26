@@ -59,7 +59,7 @@ export function initSensorRoutes(app: Express) {
 
   // A sensor connected / is pinging (every ~10s).
   app.post("/sensor-declare", (request, response) => {
-    const { id, name } = request.body;
+    const { id, name, value } = request.body;
     let node = findNode(id);
 
     if (!node) {
@@ -76,6 +76,11 @@ export function initSensorRoutes(app: Express) {
       node.lastPing = new Date();
       assignNodeIp(id, request.ip);
     }
+    // Heartbeat reconvergence: when the declare carries the device's current
+    // value (latched state), re-apply it so a missed `/sensor-update` edge heals
+    // within one heartbeat. No-op when already in sync. Inert for firmware that
+    // doesn't yet include `value` in its declare body.
+    if (value !== undefined) node.reconcile(value);
     response.send(true);
   });
 

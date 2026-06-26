@@ -9,6 +9,8 @@ import {
   channelSchema,
   channelValue,
   isObjectBlobCategory,
+  reconcileValueWrite,
+  toBoolean,
   withChannelValue,
 } from "../clients/channels";
 
@@ -96,6 +98,15 @@ export class Node {
 
     this.mergeDBData();
 
+    // Legacy DB records stored boolean sensors as 0/1; coerce a restored scalar
+    // boolean to a real boolean so strict-equality checks never see a numeric —
+    // both the server edge-trigger (`channelValue(...) !== true`) and the
+    // dashboard tile's `sensor.value === true`. Object-blob categories
+    // (presence-relay) keep their per-channel shape and are left alone.
+    if (this.type === "boolean" && !isObjectBlobCategory(this.category)) {
+      this.value = toBoolean(this.value);
+    }
+
     // Legacy first-ping push: actuator nodes (writable, non-precision) get their
     // restored value pushed on construction. Sensors have nothing to push.
     if (this.hasWritableChannels() && !PRECISION_CATEGORIES.includes(this.category)) {
@@ -140,7 +151,8 @@ export class Node {
     causedBy?: EventMeta["causedBy"],
   ): Promise<boolean> {
     if (manual) this.manual = true;
-    const result = this.notify(withChannelValue(this.category, this.value, key, value), source, { causedBy });
+    const folded = withChannelValue(this.category, this.value, key, value);
+    const result = this.notify(reconcileValueWrite(this.category, this.value, folded), source, { causedBy });
     if (!manual) return result;
     return result.then((success) => {
       if (this._timer) {
@@ -166,13 +178,22 @@ export class Node {
     // writes actuate without latching `manual`, so automations keep applying —
     // mirrors the source-aware lock setChannel already does for channel writes.
     if (source === "dashboard") this.manual = true;
-    return this.notify(value, source).then((success) => {
+    return this.notify(reconcileValueWrite(this.category, this.value, value), source).then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);
         this._timer = null;
       }
       return success;
     });
+  }
+
+  /** Release the `manual` lock — control returns to automations (the "natural reset" of
+   * docs/EFFECTS_DYNAMIC.md §8). Idempotent. Called by the daily reset (and available for
+   * an explicit dashboard "back to automatic" control). Returns true if the lock changed. */
+  releaseManual(): boolean {
+    if (!this.manual) return false;
+    this.manual = false;
+    return true;
   }
 
   notify(value: any, source: IngestionSource = "system", meta: EventMeta = {}): Promise<boolean> {
@@ -307,6 +328,38 @@ export class Node {
     } else {
       this.updateValueSensor(value, sensorChannels, source);
     }
+  }
+
+  /**
+   * Heartbeat reconvergence. The sensor declare carries the device's current value
+   * (its latched state), so a missed `/sensor-update` edge — a dropped POST, or the
+   * hub restarting while the sensor was already active — heals within one heartbeat
+   * instead of persisting until the next physical edge. Re-applies the value through
+   * the normal `report` path ONLY when it differs from what we hold, so a periodic
+   * re-report is a no-op when already in sync (no redundant WS emit).
+   *
+   * Scoped to single-channel BOOLEAN sensors (presence/motion). A boolean has a
+   * clean "in sync vs flipped" comparison, so a steady heartbeat is genuinely
+   * silent. Value sensors (temp/humidity) are deliberately excluded — every
+   * changed reading would differ and emit, which is the opposite of the "only on
+   * a missed edge" intent; those report through `/sensor-update` as before.
+   */
+  reconcile(value: any, source: IngestionSource = "device") {
+    const channel = this.booleanSensorChannel();
+    if (!channel) return;
+    const incoming = value === 1 || value === true;
+    if (channelValue(this.category, channel.key, this.value) !== incoming) {
+      this.report(value, source);
+    }
+  }
+
+  /** The lone boolean sensor channel, if this node is a single-channel boolean
+   * sensor (presence/motion); otherwise undefined. */
+  private booleanSensorChannel(): ChannelSpec | undefined {
+    const sensorChannels = this.channels.filter((c) => c.role === "sensor");
+    return sensorChannels.length === 1 && sensorChannels[0].kind === "boolean"
+      ? sensorChannels[0]
+      : undefined;
   }
 
   /** Coverage stamp for a sensor trigger: a change already mapped by an enabled

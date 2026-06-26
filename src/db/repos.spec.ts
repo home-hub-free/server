@@ -6,7 +6,7 @@ import { DevicesRepo } from "./devices.repo";
 import { SensorsRepo } from "./sensors.repo";
 import { EffectsRepo } from "./effects.repo";
 import { NodesRepo } from "./nodes.repo";
-import { migrateEffectsToNormalized } from "./migrate";
+import { migrateEffectsToNormalized, migrateEffectsToDynamic } from "./migrate";
 import { ConfigRepo } from "./config.repo";
 
 describe("DevicesRepo (simple-json-db drop-in)", () => {
@@ -152,11 +152,13 @@ describe("Stage-4b effects migration (migrateEffectsToNormalized)", () => {
     new NodesRepo().set("cooler-sala", { id: "cooler-sala", category: "evap-cooler" });
 
     migrateEffectsToNormalized();
+    migrateEffectsToDynamic();
 
-    // Table is now the new shape and the rule is normalized.
+    // Table is now the dynamic trigger+arms shape; the rule reads back via the flat adapter.
     const cols = db.prepare("PRAGMA table_info(effects)").all() as { name: string }[];
-    expect(cols.some((c) => c.name === "when_source")).toBe(true);
+    expect(cols.some((c) => c.name === "trigger_source")).toBe(true);
     expect(cols.some((c) => c.name === "when_is")).toBe(false);
+    expect(cols.some((c) => c.name === "when_source")).toBe(false);
     expect(new EffectsRepo().getNormalized()).toEqual([
       {
         when: { source: "sensor", nodeId: "th-sala", channel: "temperature", op: "gt", value: 28 },
@@ -177,6 +179,63 @@ describe("Stage-4b effects migration (migrateEffectsToNormalized)", () => {
     ]);
     migrateEffectsToNormalized();
     expect(repo.getNormalized()).toHaveLength(1);
+  });
+});
+
+describe("Dynamic effects migration (migrateEffectsToDynamic)", () => {
+  it("rebuilds a flat-normalized effects table into trigger+arms storage", () => {
+    // Recreate the Stage-4b flat-normalized table (the live shape) and seed a rule.
+    db.exec("DROP TABLE IF EXISTS effect_conditions");
+    db.exec("DROP TABLE IF EXISTS effect_arms");
+    db.exec("DROP TABLE effects");
+    db.exec(`
+      CREATE TABLE effects (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        when_source TEXT NOT NULL, when_node_id TEXT, when_channel TEXT,
+        when_op TEXT, when_value TEXT, when_at TEXT,
+        set_node_id TEXT NOT NULL, set_channel TEXT NOT NULL, set_value TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    db.prepare(
+      `INSERT INTO effects (when_source, when_node_id, when_channel, when_op, when_value,
+                            set_node_id, set_channel, set_value, enabled)
+       VALUES ('sensor', 'pir-hall', 'presence', 'eq', 'true', 'lamp-hall', 'power', 'true', 1)`,
+    ).run();
+
+    migrateEffectsToDynamic();
+
+    const cols = db.prepare("PRAGMA table_info(effects)").all() as { name: string }[];
+    expect(cols.some((c) => c.name === "trigger_source")).toBe(true);
+    expect(cols.some((c) => c.name === "when_source")).toBe(false);
+
+    // The flat rule is now a single-arm Effect: trigger is the edge, the value guard
+    // moved into the arm's sensor condition.
+    expect(new EffectsRepo().getAll()).toEqual([
+      {
+        trigger: { source: "sensor", nodeId: "pir-hall", channel: "presence" },
+        arms: [
+          {
+            when: [{ kind: "sensor", nodeId: "pir-hall", channel: "presence", op: "eq", value: true }],
+            set: { nodeId: "lamp-hall", channel: "power", value: true },
+          },
+        ],
+        enabled: true,
+      },
+    ]);
+  });
+
+  it("is a no-op once the table is already dynamic", () => {
+    const repo = new EffectsRepo();
+    repo.setAll([
+      {
+        trigger: { source: "sensor", nodeId: "pir", channel: "presence" },
+        arms: [{ when: [], set: { nodeId: "light", channel: "power", value: true } }],
+        enabled: true,
+      },
+    ]);
+    migrateEffectsToDynamic();
+    expect(repo.getAll()).toHaveLength(1);
   });
 });
 

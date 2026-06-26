@@ -5,6 +5,8 @@ export { DevicesRepo } from "./devices.repo";
 export { SensorsRepo } from "./sensors.repo";
 export { EffectsRepo, IEffect } from "./effects.repo";
 export { ConfigRepo } from "./config.repo";
+export { TimersRepo, elapsedSeconds } from "./timers.repo";
+export type { TimerRow, TimerKind, TimerStatus, CreateTimerInput } from "./timers.repo";
 
 /**
  * Initialize the hub's SQLite store. The connection + schema are applied lazily on
