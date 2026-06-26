@@ -37,6 +37,26 @@ export function initAuthRoutes(app: Express) {
     res.json({ user: req.user });
   });
 
+  // Self-service password change: the signed-in member proves their current
+  // password (not just possession of a token) before setting a new one. Service
+  // -token callers have no `req.user`, so they can't use this route.
+  app.post("/auth/change-password", requireAuth, (req, res) => {
+    if (!req.user) return res.status(401).json({ error: "unauthorized" });
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "currentPassword and newPassword required" });
+    }
+    if (String(newPassword).length < 4) {
+      return res.status(400).json({ error: "new password is too short" });
+    }
+    const row = usersRepo.getRowByUsername(req.user.username);
+    if (!row || !verifyPassword(String(currentPassword), row.pass_hash)) {
+      return res.status(403).json({ error: "current password is incorrect" });
+    }
+    usersRepo.setPassword(req.user.id, String(newPassword));
+    res.json({ ok: true });
+  });
+
   // ── household roster (any signed-in member can manage; home LAN) ────────────
   app.get("/auth/users", requireAuth, (_req, res) => {
     res.json({ users: usersRepo.list() });
