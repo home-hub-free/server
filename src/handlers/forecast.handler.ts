@@ -1,8 +1,14 @@
 import axios from 'axios';
-import { WeatherDescriptions } from '../weather-descriptions';
-const WeatherApiURL = 'https://api.weatherapi.com/v1/';
-const WeatherApiKey = process.env.WEATHER_API_KEY || '';
-const WeatherApiQuery = process.env.WEATHER_API_QUERY || '';
+import { describeWeatherCode } from '../weather-descriptions';
+
+// Open-Meteo — free, keyless weather forecast (https://open-meteo.com/en/docs).
+// No API key/signup: location is a lat/lon. Defaults to Santiago de Querétaro (Vista Hermosa,
+// CP 76063); override with WEATHER_LATITUDE / WEATHER_LONGITUDE. `timezone=auto` makes all
+// returned timestamps local to that location, so sunrise/sunset and hourly indices line up
+// with the hub's local clock without any offset math.
+const OpenMeteoURL = 'https://api.open-meteo.com/v1/forecast';
+const Latitude = process.env.WEATHER_LATITUDE || '20.5888';
+const Longitude = process.env.WEATHER_LONGITUDE || '-100.3899';
 
 export interface IForecastData {
   maxTemp: {
@@ -28,13 +34,11 @@ export interface IAstroData {
 export let astro: IAstroData = {
   sunset: null,
   sunrise: null,
+  // Open-Meteo's free forecast endpoint does not provide moon times; kept on the interface
+  // for compatibility but always null (no current consumer reads them).
   moonrise: null,
   moonset: null
 };
-// Wall-clock of the last successful weatherapi.com fetch. null until the first
-// success — consumers (e.g. GET /state) use it to avoid feeding stale/empty
-// forecast values into the agent prompt when the key/query is unset or the API is down.
-export let weatherLastUpdated: Date | null = null;
 export let forecast: IForecastData = {
   maxTemp: {
     hour: 0,
@@ -49,6 +53,11 @@ export let forecast: IForecastData = {
   hourlyTemperatures: [],
 };
 
+// Wall-clock of the last successful Open-Meteo fetch. null until the first success —
+// consumers (e.g. GET /state) use it to avoid feeding stale/empty forecast values into the
+// agent prompt when the API is unreachable.
+export let weatherLastUpdated: Date | null = null;
+
 export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
   let hours = new Date().getHours();
   if (hours >= 0 && hours <= 11) {
@@ -61,11 +70,20 @@ export function getDayTimeWord(): 'morning' | 'afternoon' | 'evening' {
 }
 
 /**
- * Hits the weather API endpoint to get the current weather conditions
- * @returns Simplified data from the weather API
+ * Hits the Open-Meteo endpoint to get today's weather conditions.
+ * @returns Simplified data ({ forecast, astro }) from the weather API
  */
 export function updateWeatherData(): Promise<any> {
-  let url = `${WeatherApiURL}forecast.json?key=${WeatherApiKey}&q=${WeatherApiQuery}&days=1&aqi=no&alerts=no`;
+  const params = new URLSearchParams({
+    latitude: Latitude,
+    longitude: Longitude,
+    current: 'temperature_2m,relative_humidity_2m,weather_code',
+    hourly: 'temperature_2m,relative_humidity_2m',
+    daily: 'temperature_2m_min,temperature_2m_max,sunrise,sunset,weather_code',
+    timezone: 'auto',
+    forecast_days: '1',
+  });
+  const url = `${OpenMeteoURL}?${params.toString()}`;
   return new Promise((resolve, reject) => {
     axios.get(url)
       .then((result) => {
@@ -73,7 +91,7 @@ export function updateWeatherData(): Promise<any> {
         updateAstroData(result);
         weatherLastUpdated = new Date();
 
-        resolve({ forecast, astro});
+        resolve({ forecast, astro });
       })
       .catch((err) => {
         if (err) {
@@ -84,60 +102,59 @@ export function updateWeatherData(): Promise<any> {
 }
 
 function updateForecastData(result) {
-  let currentHour = new Date().getHours();
-  let forecastDay = result.data.forecast.forecastday[0];
-  
-  // Define if temperature is currently rising
-  let isRising = null;
-  let currentHourForecast = forecastDay.hour[currentHour];
-  let nextHourForecast = forecastDay.hour[currentHour + 1];
-  if (nextHourForecast) isRising = currentHourForecast.temp_c < nextHourForecast.temp_c;
+  const data = result.data;
+  const currentHour = new Date().getHours();
 
-  // Define the time of the day with the highest temperature
-  // This is an array of length 23, one index per hour of the day
-  let temperatures = forecastDay.hour.map(hourData => hourData.temp_c);
+  // hourly.temperature_2m is one value per hour for the forecast day (24 entries with forecast_days=1).
+  const temperatures: number[] = (data.hourly && data.hourly.temperature_2m) || [];
+  const humidities: number[] = (data.hourly && data.hourly.relative_humidity_2m) || [];
   forecast.hourlyTemperatures = temperatures;
-  let highestTemp = Math.max(...temperatures)
-  let hour = temperatures.indexOf(highestTemp);
-  forecast.maxTemp.value = highestTemp;
-  forecast.maxTemp.hour = hour;
-  
-  // Update all important values
-  forecast.minTemp = forecastDay.day.mintemp_c;
-  forecast.currentTemp = currentHourForecast.temp_c;
-  forecast.dayAvgTemp = forecastDay.day.avgtemp_c;
-  forecast.humidityAvg = forecastDay.day.avghumidity;
-  // weatherapi.com occasionally returns a condition code not in our static table; fall
-  // back to the API's own text rather than throwing (which would reject the whole fetch
-  // and leave weatherLastUpdated/forecast stale).
-  const match = WeatherDescriptions.find((item) => item.code === forecastDay.day.condition.code);
-  forecast.description = match ? match.sentence : (forecastDay.day.condition.text || '');
+
+  // Is the temperature currently rising? Compare this hour to the next.
+  let isRising = null;
+  if (temperatures[currentHour] != null && temperatures[currentHour + 1] != null) {
+    isRising = temperatures[currentHour] < temperatures[currentHour + 1];
+  }
   forecast.isRising = isRising;
+
+  // Time of day with the highest temperature (index = hour).
+  if (temperatures.length) {
+    const highestTemp = Math.max(...temperatures);
+    forecast.maxTemp.value = highestTemp;
+    forecast.maxTemp.hour = temperatures.indexOf(highestTemp);
+  }
+
+  // Open-Meteo has no single "average" field, so derive day averages from the hourly series.
+  forecast.dayAvgTemp = temperatures.length ? round1(avg(temperatures)) : 0;
+  forecast.humidityAvg = humidities.length ? Math.round(avg(humidities)) : 0;
+
+  forecast.minTemp = firstDaily(data, 'temperature_2m_min', 0);
+  forecast.currentTemp = (data.current && data.current.temperature_2m) ?? temperatures[currentHour] ?? 0;
+  forecast.description = describeWeatherCode(firstDaily(data, 'weather_code', null));
 }
 
 function updateAstroData(result) {
-  let astroServerData = result.data.forecast.forecastday[0].astro;
-  astro.sunrise = timeStringToDate(astroServerData.sunrise);
-  astro.sunset = timeStringToDate(astroServerData.sunset);
-  astro.moonrise = timeStringToDate(astroServerData.moonrise);
-  astro.moonset = timeStringToDate(astroServerData.moonset);
+  const data = result.data;
+  // With timezone=auto these are local naive ISO strings (e.g. "2026-06-26T06:02"), which
+  // `new Date(...)` parses as local time — exactly what the daily-events scheduler expects.
+  const sunrise = firstDaily(data, 'sunrise', null);
+  const sunset = firstDaily(data, 'sunset', null);
+  astro.sunrise = sunrise ? new Date(sunrise) : null;
+  astro.sunset = sunset ? new Date(sunset) : null;
+  astro.moonrise = null;
+  astro.moonset = null;
 }
 
-// Date string comes in format: HH:MM AM/PM
-function timeStringToDate(date: string): Date {
-  let ISODate = new Date();
-  let splitted = date.split(' ');
-  let time = splitted[0];
-  let meridian: string = splitted[1];
+// daily.* fields are arrays (one entry per forecast day); we only ever request day 0.
+function firstDaily(data: any, key: string, fallback: any) {
+  const arr = data && data.daily && data.daily[key];
+  return Array.isArray(arr) && arr.length ? arr[0] : fallback;
+}
 
-  let timeSplitted = time.split(':');
-  let intHours = parseInt(timeSplitted[0]);
-  let hour: number = meridian === 'PM' ? intHours + 12 : intHours;
-  let minute = parseInt(timeSplitted[1]);
+function avg(nums: number[]): number {
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
 
-  ISODate.setHours(hour);
-  ISODate.setMinutes(minute);
-  ISODate.setSeconds(0);
-
-  return ISODate;
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }

@@ -61,9 +61,9 @@ function dayPart(d: Date): "morning" | "afternoon" | "evening" | "night" {
 }
 
 // Compact outdoor-weather block for the agent prompt. Returns null until the first
-// successful weatherapi.com fetch (WEATHER_API_KEY/WEATHER_API_QUERY unset or API down)
-// so the agent never reasons over the zero-filled default forecast. hourlyTemperatures
-// and moon times are intentionally dropped — too verbose / low-signal for the prompt.
+// successful Open-Meteo fetch (API unreachable at boot) so the agent never reasons over
+// the zero-filled default forecast. hourlyTemperatures and moon times are intentionally
+// dropped — too verbose / low-signal for the prompt.
 function weatherSnap() {
   if (!weatherLastUpdated) return null;
   return {
