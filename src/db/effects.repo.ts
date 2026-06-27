@@ -26,6 +26,15 @@ export interface IEffect {
   };
 }
 
+/** A rule in the dynamic shape WITH its stable row id + enabled flag — the agent-facing view
+ *  (GET /state) so the assistant can name a specific rule to disable or delete. */
+export interface EffectSummary {
+  id: number;
+  enabled: boolean;
+  trigger: Trigger;
+  arms: Arm[];
+}
+
 /**
  * The automation-rule store. As of EFFECTS_DYNAMIC Stage 1 the stored shape is the
  * dynamic `trigger + arms` model (docs/EFFECTS_DYNAMIC.md §5), spread across three
@@ -46,6 +55,8 @@ let _selEffects: ReturnType<typeof db.prepare> | undefined;
 let _selArms: ReturnType<typeof db.prepare> | undefined;
 let _selConds: ReturnType<typeof db.prepare> | undefined;
 let _delEffects: ReturnType<typeof db.prepare> | undefined;
+let _delEffectById: ReturnType<typeof db.prepare> | undefined;
+let _updEffectEnabled: ReturnType<typeof db.prepare> | undefined;
 let _insEffect: ReturnType<typeof db.prepare> | undefined;
 let _insArm: ReturnType<typeof db.prepare> | undefined;
 let _insCond: ReturnType<typeof db.prepare> | undefined;
@@ -66,6 +77,8 @@ const selConds = () =>
      WHERE arm_id = ? ORDER BY position`,
   ));
 const delEffects = () => (_delEffects ??= db.prepare("DELETE FROM effects"));
+const delEffectById = () => (_delEffectById ??= db.prepare("DELETE FROM effects WHERE id = ?"));
+const updEffectEnabled = () => (_updEffectEnabled ??= db.prepare("UPDATE effects SET enabled = ? WHERE id = ?"));
 const insEffect = () =>
   (_insEffect ??= db.prepare(
     `INSERT INTO effects (trigger_source, trigger_node, trigger_channel, trigger_at, enabled)
@@ -169,9 +182,34 @@ export class EffectsRepo {
     replaceAll(effects || []);
   }
 
+  /** Rules WITH their stable row id + enabled flag, in the dynamic shape — the agent-facing view
+   *  (GET /state) so the assistant can reference a rule to disable/delete it. Unlike getAll() (runtime,
+   *  id-less) this keeps the id; unlike getNormalized() (flat, single-arm only) it keeps every arm. */
+  summaries(): EffectSummary[] {
+    return (selEffects().all() as EffectRow[]).map((er) => ({
+      id: er.id,
+      enabled: er.enabled !== 0,
+      trigger: rowToTrigger(er),
+      arms: (selArms().all(er.id) as ArmRow[]).map((ar) => ({
+        when: (selConds().all(ar.id) as CondRow[]).map(rowToCondition),
+        set: { nodeId: ar.set_node, channel: ar.set_channel, value: JSON.parse(ar.set_value) },
+      })),
+    }));
+  }
+
   /** Append a single rule. */
   add(effect: Effect): void {
     this.insertOne(effect);
+  }
+
+  /** Delete one rule by its id (ON DELETE CASCADE clears its arms + conditions). True if a row went. */
+  delete(id: number): boolean {
+    return delEffectById().run(id).changes > 0;
+  }
+
+  /** Enable/disable one rule by id without deleting it. True if a row actually changed. */
+  setEnabled(id: number, enabled: boolean): boolean {
+    return updEffectEnabled().run(enabled ? 1 : 0, id).changes > 0;
   }
 
   private insertOne(e: Effect): void {

@@ -248,3 +248,41 @@ describe("ConfigRepo (v-assistant kv)", () => {
     expect(repo.get("missing")).toBeUndefined();
   });
 });
+
+// The agent-facing rule surface (GET /state → summaries; manage_effect → delete/setEnabled). Each
+// rule must carry a stable id the assistant can name to disable or remove it.
+describe("EffectsRepo agent surface (summaries / setEnabled / delete)", () => {
+  const repo = new EffectsRepo();
+
+  it("summaries() exposes id + enabled + the dynamic trigger/arms shape", () => {
+    repo.setAll([
+      {
+        trigger: { source: "sensor", nodeId: "pir", channel: "presence" },
+        arms: [{ when: [], set: { nodeId: "light", channel: "power", value: true } }],
+        enabled: true,
+      },
+    ]);
+    const sums = repo.summaries();
+    expect(sums).toHaveLength(1);
+    expect(typeof sums[0].id).toBe("number");
+    expect(sums[0].enabled).toBe(true);
+    expect(sums[0].trigger).toEqual({ source: "sensor", nodeId: "pir", channel: "presence" });
+    expect(sums[0].arms[0].set).toEqual({ nodeId: "light", channel: "power", value: true });
+  });
+
+  it("setEnabled flips one rule by id; an unknown id is a no-op", () => {
+    const id = repo.summaries()[0].id;
+    expect(repo.setEnabled(id, false)).toBe(true);
+    expect(repo.summaries()[0].enabled).toBe(false);
+    expect(repo.setEnabled(id, true)).toBe(true);
+    expect(repo.summaries()[0].enabled).toBe(true);
+    expect(repo.setEnabled(999999, false)).toBe(false);
+  });
+
+  it("delete removes one rule by id and reports false for an unknown id", () => {
+    const id = repo.summaries()[0].id;
+    expect(repo.delete(id)).toBe(true);
+    expect(repo.summaries()).toHaveLength(0);
+    expect(repo.delete(id)).toBe(false);
+  });
+});

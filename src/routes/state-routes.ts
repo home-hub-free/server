@@ -124,8 +124,33 @@ export function initStateRoutes(app: Express): void {
       zones,
       devices: deviceSnaps,
       sensors: sensorSnaps,
-      effects: EffectsDB.get("effects") || [],
+      // Dynamic shape WITH each rule's id + enabled flag, so the agent can name one to disable/delete
+      // (manage_effect). Replaces the old flat, id-less view — /state is agent-only, so no other
+      // consumer depends on the legacy shape (the dashboard uses /get-effects*).
+      effects: EffectsDB.summaries(),
       weather: weatherSnap(),
     });
+  });
+
+  // Per-zone occupancy derived from the presence/motion sensors — a clean "who/what is where" the
+  // agent can read directly instead of inferring it from raw sensor rows. A zone is `occupied` when
+  // ANY of its presence/motion sensors reads true. Sensors with no zone are grouped under "(unzoned)".
+  app.get("/presence", (req, res) => {
+    const zoneParam = typeof req.query.zone === "string" ? req.query.zone.trim().toLowerCase() : undefined;
+    const presence = sensorNodes().filter((s) => s.category === "presence" || s.category === "motion");
+
+    const byZone = new Map<string, { zone: string; occupied: boolean; sensors: any[] }>();
+    for (const s of presence) {
+      const zone = s.zone || "(unzoned)";
+      if (zoneParam && zone.toLowerCase() !== zoneParam) continue;
+      const active = s.value === true;
+      const entry = byZone.get(zone) ?? { zone, occupied: false, sensors: [] };
+      entry.occupied = entry.occupied || active;
+      entry.sensors.push({ id: s.id, name: s.name, category: s.category, active });
+      byZone.set(zone, entry);
+    }
+
+    const zones = [...byZone.values()].sort((a, b) => a.zone.localeCompare(b.zone));
+    res.json({ ok: true, anyoneHome: zones.some((z) => z.occupied), zones });
   });
 }

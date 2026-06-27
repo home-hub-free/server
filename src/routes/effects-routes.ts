@@ -113,4 +113,24 @@ export function initEffectsRoutes(app: Express) {
     onEffectsChanged();
     response.send(true);
   });
+
+  // Delete ONE rule by its id (the symmetric undo of /set-effect — lets the assistant remove an
+  // automation by voice instead of the all-or-nothing /set-effects replace). id comes from /state.
+  app.post("/delete-effect", requireAuth, (request, response) => {
+    const id = Number(request.body?.id);
+    if (!Number.isInteger(id)) return response.status(400).send({ ok: false, error: "numeric id required" });
+    const removed = EffectsDB.delete(id);
+    if (removed) onEffectsChanged();
+    response.send({ ok: removed, id });
+  });
+
+  // Enable/disable ONE rule by id without deleting it (a reversible "turn this automation off").
+  app.post("/set-effect-enabled", requireAuth, (request, response) => {
+    const id = Number(request.body?.id);
+    const enabled = request.body?.enabled !== false; // default true
+    if (!Number.isInteger(id)) return response.status(400).send({ ok: false, error: "numeric id required" });
+    const changed = EffectsDB.setEnabled(id, enabled);
+    if (changed) onEffectsChanged();
+    response.send({ ok: changed, id, enabled });
+  });
 }

@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { PRECISION_CATEGORIES } from "../classes/node.class";
+import { PRECISION_CATEGORIES, NodeCategory } from "../classes/node.class";
 import {
   nodes,
   findNode,
@@ -19,6 +19,24 @@ import { io } from "../handlers/websockets.handler";
 import { emitDeviceDeclare, emitDeviceState, EventMeta } from "../clients/ingestion";
 import { NodeBlinds } from "../classes/node.class";
 import { requireAuth, requireActor } from "../auth/middleware";
+
+// Categories a blanket "apaga todas las luces" / "apaga todo en la sala" may sweep. Deliberately the
+// switchable + dimmable + positional actuators only: the cooler is excluded (it has its own
+// set_cooler + a temperature closed loop a flat on/off write would fight), and camera/sensors aren't
+// actuatable. The agent scopes a group call by zone and/or category; both omitted = every device here.
+const GROUP_CATEGORIES = new Set<NodeCategory>(["light", "door", "dimmable-light", "blinds"]);
+
+/** Map a group request value (a plain on/off, or a 0–100 level) onto what THIS category expects:
+ *  a boolean for light/door, a clamped 0–100 number for dimmable-light/blinds. So one "apágalo todo"
+ *  (false) turns booleans off AND drives dimmables/blinds to 0; one "ponlo al 40" lights a plain bulb
+ *  (40 > 0 → on) and sets a dimmable to 40. */
+function coerceGroupValue(category: NodeCategory, value: boolean | number): boolean | number {
+  if (category === "light" || category === "door") {
+    return typeof value === "boolean" ? value : value > 0;
+  }
+  const n = typeof value === "boolean" ? (value ? 100 : 0) : value;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
 
 export function initDeviceRoutes(app: Express) {
   app.get("/get-devices", (request, response) => {
@@ -97,6 +115,54 @@ export function initDeviceRoutes(app: Express) {
         response.send(clientData);
       })
       .catch(() => response.send(false));
+  });
+
+  // Actuate MANY devices in one shot: "apaga todas las luces", "apaga todo en la sala", "cierra todo".
+  // Resolves the switchable devices matching the optional zone and/or category filters and applies a
+  // per-category-coerced value to each. Same actor/source contract as /device-update (requireActor):
+  // an llm/voice source actuates without latching `manual`; a dashboard write is attributed + latches.
+  app.post("/device-update-group", requireActor, (request, response) => {
+    const { value, zone, category, source: rawSource } = request.body ?? {};
+    if (value === undefined || value === null) {
+      return response.status(400).send({ ok: false, error: "value required" });
+    }
+    if (category != null && !GROUP_CATEGORIES.has(category)) {
+      return response.status(400).send({ ok: false, error: `category must be one of ${[...GROUP_CATEGORIES].join(", ")}` });
+    }
+
+    const source =
+      rawSource === "llm" || rawSource === "voice" ? rawSource : "dashboard";
+    const actor: EventMeta["actor"] =
+      source === "dashboard" && request.user
+        ? { id: request.user.id, name: request.user.displayName }
+        : undefined;
+
+    const zoneFilter = typeof zone === "string" && zone.trim() ? zone.trim().toLowerCase() : undefined;
+    const targets = nodes.filter(
+      (n) =>
+        GROUP_CATEGORIES.has(n.category) &&
+        (!category || n.category === category) &&
+        (!zoneFilter || (n.zone || "").toLowerCase() === zoneFilter),
+    );
+
+    Promise.all(
+      targets.map((n) =>
+        n
+          .manualTrigger(coerceGroupValue(n.category, value), source, actor)
+          .then((ok) => {
+            if (ok) persistNode(n);
+            return { id: n.id, name: n.name, zone: n.zone || undefined, category: n.category, ok };
+          })
+          .catch(() => ({ id: n.id, name: n.name, zone: n.zone || undefined, category: n.category, ok: false })),
+      ),
+    ).then((devices) => {
+      response.send({
+        ok: true,
+        matched: targets.length,
+        applied: devices.filter((d) => d.ok).length,
+        devices,
+      });
+    });
   });
 
   app.post("/device-blinds-configure", requireAuth, (request, response) => {
