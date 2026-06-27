@@ -11,6 +11,7 @@
 import type { Express } from "express";
 import { deviceNodes, sensorNodes } from "../handlers/node.handler";
 import { EffectsDB } from "./effects-routes";
+import { forecast, astro, weatherLastUpdated } from "../handlers/forecast.handler";
 
 interface DeviceSnap {
   id: string;
@@ -59,6 +60,28 @@ function dayPart(d: Date): "morning" | "afternoon" | "evening" | "night" {
   return "night";
 }
 
+// Compact outdoor-weather block for the agent prompt. Returns null until the first
+// successful weatherapi.com fetch (WEATHER_API_KEY/WEATHER_API_QUERY unset or API down)
+// so the agent never reasons over the zero-filled default forecast. hourlyTemperatures
+// and moon times are intentionally dropped — too verbose / low-signal for the prompt.
+function weatherSnap() {
+  if (!weatherLastUpdated) return null;
+  return {
+    unit: "C",
+    currentTemp: forecast.currentTemp,
+    minTemp: forecast.minTemp,
+    maxTemp: forecast.maxTemp.value,
+    maxTempHour: forecast.maxTemp.hour,
+    dayAvgTemp: forecast.dayAvgTemp,
+    humidityAvg: forecast.humidityAvg,
+    description: forecast.description,
+    rising: forecast.isRising,
+    sunrise: astro.sunrise ? localISO(astro.sunrise) : null,
+    sunset: astro.sunset ? localISO(astro.sunset) : null,
+    updatedAt: localISO(weatherLastUpdated),
+  };
+}
+
 export function initStateRoutes(app: Express): void {
   app.get("/state", (_req, res) => {
     const now = new Date();
@@ -102,6 +125,7 @@ export function initStateRoutes(app: Express): void {
       devices: deviceSnaps,
       sensors: sensorSnaps,
       effects: EffectsDB.get("effects") || [],
+      weather: weatherSnap(),
     });
   });
 }

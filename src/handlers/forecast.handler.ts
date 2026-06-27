@@ -31,6 +31,10 @@ export let astro: IAstroData = {
   moonrise: null,
   moonset: null
 };
+// Wall-clock of the last successful weatherapi.com fetch. null until the first
+// success — consumers (e.g. GET /state) use it to avoid feeding stale/empty
+// forecast values into the agent prompt when the key/query is unset or the API is down.
+export let weatherLastUpdated: Date | null = null;
 export let forecast: IForecastData = {
   maxTemp: {
     hour: 0,
@@ -67,6 +71,7 @@ export function updateWeatherData(): Promise<any> {
       .then((result) => {
         updateForecastData(result);
         updateAstroData(result);
+        weatherLastUpdated = new Date();
 
         resolve({ forecast, astro});
       })
@@ -102,7 +107,11 @@ function updateForecastData(result) {
   forecast.currentTemp = currentHourForecast.temp_c;
   forecast.dayAvgTemp = forecastDay.day.avgtemp_c;
   forecast.humidityAvg = forecastDay.day.avghumidity;
-  forecast.description = WeatherDescriptions.find((item) => item.code === forecastDay.day.condition.code).sentence;
+  // weatherapi.com occasionally returns a condition code not in our static table; fall
+  // back to the API's own text rather than throwing (which would reject the whole fetch
+  // and leave weatherLastUpdated/forecast stale).
+  const match = WeatherDescriptions.find((item) => item.code === forecastDay.day.condition.code);
+  forecast.description = match ? match.sentence : (forecastDay.day.condition.text || '');
   forecast.isRising = isRising;
 }
 
