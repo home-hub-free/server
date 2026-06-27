@@ -81,10 +81,13 @@ export function setOnEffectsChanged(fn: () => void): void {
 }
 
 export function initEffectsRoutes(app: Express) {
-  // Dynamic contract (EFFECTS_DYNAMIC §2) — whole `trigger + arms` rules. The canonical
-  // view once the dashboard/LLM speak it natively.
+  // Dynamic contract (EFFECTS_DYNAMIC §2) — whole `trigger + arms` rules. Served via
+  // summaries() so each rule carries its stable row id + enabled flag: the dashboard
+  // management UI needs that to disable/delete a specific rule, and it's the same id
+  // space the agent uses (/state + /delete-effect + /set-effect-enabled). The id is
+  // additive — runtime callers read trigger/arms in-process via getAll(), not this route.
   app.get("/get-effects-dynamic", (request, response) => {
-    response.send(EffectsDB.getAll());
+    response.send(EffectsDB.summaries());
   });
 
   // Normalized flat view — single-arm rules only (multi-arm rules have no flat form).
