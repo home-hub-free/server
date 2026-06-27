@@ -37,7 +37,14 @@ import fs from "fs";
  * devices can communicate directly to it
  */
 const app: Express = express();
-const PORT = 8088;
+// Default 8088 (matches the deployed fleet). Overridable via HUB_PORT so a SECOND, isolated instance
+// can run in parallel with prod — e.g. the bench sim stack (HUB_SIM=1 HUB_PORT=8089 HUB_DB_PATH=…),
+// which gives the scenario gate its own hub + DB instead of seeding mocks into the live control plane.
+const PORT = Number(process.env.HUB_PORT ?? 8088);
+// HUB_SIM marks a throwaway sim instance: skip the side effects that assume there's exactly ONE hub on
+// the LAN (mDNS advertisement, the fixed-port camera WS) so a parallel instance can't hijack discovery
+// or collide on a port. The DB is already isolated via HUB_DB_PATH.
+const SIM = !!process.env.HUB_SIM;
 
 app.use(express.json());
 app.use(cors());
@@ -51,11 +58,14 @@ server.listen(PORT, () => {
   // Advertise the hub over mDNS as _homehub._tcp so devices discover it by
   // service instead of a hardcoded IP. Moving the hub then needs no reflash —
   // devices re-resolve via HomeHubDevice::resolveHub(). See devices/_shared.
-  try {
-    new Bonjour().publish({ name: "home-hub", type: "homehub", port: PORT });
-    console.log("mDNS: advertising _homehub._tcp on", PORT);
-  } catch (err) {
-    console.error("mDNS advertise failed:", err);
+  // Skipped for a sim instance so it never competes with the real hub for discovery.
+  if (!SIM) {
+    try {
+      new Bonjour().publish({ name: "home-hub", type: "homehub", port: PORT });
+      console.log("mDNS: advertising _homehub._tcp on", PORT);
+    } catch (err) {
+      console.error("mDNS advertise failed:", err);
+    }
   }
 });
 

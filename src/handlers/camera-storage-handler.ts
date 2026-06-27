@@ -15,7 +15,9 @@ cameraWSServer.on("connect", () => {
   console.log("connection");
 });
 
-cameraWSServer.listen(8082);
+// Binds a fixed port at import time. A second hub instance (the isolated sim stack) would EADDRINUSE
+// here, so skip it under HUB_SIM — a sim has no cameras. Port is overridable for good measure.
+if (!process.env.HUB_SIM) cameraWSServer.listen(Number(process.env.HUB_CAMERA_WS_PORT ?? 8082));
 
 export function createStorageStream(camera: Node) {
   if (camera.category != "camera") return;
