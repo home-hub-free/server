@@ -50,6 +50,25 @@ export type NodeCategory =
 /** Categories that own their own value — the hub never pushes on first ping. */
 export const PRECISION_CATEGORIES: NodeCategory[] = ["blinds", "camera"];
 
+/** Categories whose value is governed by a hub-side closed loop — the evap-cooler's
+ * `coolerControl` decides fan/water from its own drifting temps. A closed-loop device is
+ * its OWN crystallized chain: the actuation it produces already emits `source:"automation"`
+ * (via `autoTrigger`), but so must the periodic state REPORT it sends back. Otherwise every
+ * ≥threshold temp tick that clears the ingestion gate publishes a whole-value `state` event
+ * (`source:"device"`, no channel role/kind) that sails past the gateway's per-channel
+ * significance gate and re-wakes the agent to re-reason a loop it does not run → "no_action"
+ * noise. See `deviceSelfReportMeta`. */
+export const CLOSED_LOOP_CATEGORIES: NodeCategory[] = ["evap-cooler"];
+
+/** The ingestion meta a device's OWN state report (`POST /device-value-set`) should carry.
+ * A closed-loop device's report is part of a chain the reactive agent must stay blind to, so
+ * stamp it `coveredByEffect` — the reaction plane drops it while memory keeps the honest
+ * `source:"device"` reading for pattern mining (docs/PATTERN_LIFECYCLE.md §D2). Every other
+ * device reports nothing special (an unflagged `device` event the agent may wake on). */
+export function deviceSelfReportMeta(category: NodeCategory): EventMeta {
+  return CLOSED_LOOP_CATEGORIES.includes(category) ? { coveredByEffect: true } : {};
+}
+
 const TIME_TO_INACTIVE = 1000 * 10;
 
 const BOOLEAN_CATEGORIES = new Set<NodeCategory>(["light", "door", "motion", "presence"]);
@@ -178,11 +197,14 @@ export class Node {
     value: any,
     source: IngestionSource = "dashboard",
     actor?: EventMeta["actor"],
+    latch: boolean = source === "dashboard",
   ): Promise<boolean> {
-    // Only a genuine user action grabs the wheel. Agent (llm/voice) and system
-    // writes actuate without latching `manual`, so automations keep applying —
-    // mirrors the source-aware lock setChannel already does for channel writes.
-    if (source === "dashboard") this.manual = true;
+    // Only a write with a human behind it grabs the wheel. A dashboard tap always is;
+    // an agent (llm/voice) write only when the gateway flags it as relaying a user
+    // command — the route passes that decision via `latch` (see decideWritePolicy).
+    // Agent *initiative* and system writes actuate without latching, so automations
+    // keep applying — mirrors the source-aware lock setChannel does for channel writes.
+    if (latch) this.manual = true;
     return this.notify(reconcileValueWrite(this.category, this.value, value), source, { actor }).then((success) => {
       if (this._timer) {
         clearTimeout(this._timer);
@@ -192,13 +214,20 @@ export class Node {
     });
   }
 
-  /** Release the `manual` lock — control returns to automations (the "natural reset" of
-   * docs/EFFECTS_DYNAMIC.md §8). Idempotent. Called by the daily reset (and available for
-   * an explicit dashboard "back to automatic" control). Returns true if the lock changed. */
-  releaseManual(): boolean {
-    if (!this.manual) return false;
-    this.manual = false;
+  /** Set or clear the `manual` lock explicitly — the agent's (and dashboard's) "go manual /
+   * back to automatic" control. The graceful counterpart to a lock-respecting skip: control
+   * can be handed to/from automations on purpose, not only implicitly via a write. Idempotent;
+   * returns true if the lock changed. */
+  setManual(on: boolean): boolean {
+    if (this.manual === on) return false;
+    this.manual = on;
     return true;
+  }
+
+  /** Release the `manual` lock — control returns to automations (the "natural reset" of
+   * docs/EFFECTS_DYNAMIC.md §8). Idempotent. Called by the daily reset. Returns true if changed. */
+  releaseManual(): boolean {
+    return this.setManual(false);
   }
 
   notify(value: any, source: IngestionSource = "system", meta: EventMeta = {}): Promise<boolean> {

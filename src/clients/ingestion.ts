@@ -22,9 +22,11 @@ import {
  * that into memory-service writes. The hub never touches memory-service or its
  * Postgres/Kuzu directly.
  *
- * TRANSPORT (Stage 1): `publish()` ships events to Mosquitto over MQTT, but only
- * when `INGESTION_ENABLED=true`. The whole seam stays a guarded no-op otherwise,
- * so the control plane has ZERO runtime dependency on the broker/brain being up:
+ * TRANSPORT: `publish()` ships events to Mosquitto over MQTT, but only when
+ * `INGESTION_ENABLED=true` — which it now IS in `server/.env` (the seam is live, not
+ * a deferred no-op). When the flag is unset (tests + any deploy without `server/.env`)
+ * the whole seam stays a guarded no-op, so the control plane has ZERO runtime
+ * dependency on the broker/brain being up:
  *  - with the flag unset no client is ever created (tests + default deploys);
  *  - publishes are fire-and-forget QoS 0, gated on a live connection (events are
  *    dropped, never buffered, if the broker is down — this is best-effort

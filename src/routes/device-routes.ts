@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { PRECISION_CATEGORIES, NodeCategory } from "../classes/node.class";
+import { PRECISION_CATEGORIES, NodeCategory, deviceSelfReportMeta } from "../classes/node.class";
 import {
   nodes,
   findNode,
@@ -19,6 +19,8 @@ import { io } from "../handlers/websockets.handler";
 import { emitDeviceDeclare, emitDeviceState, EventMeta } from "../clients/ingestion";
 import { NodeBlinds } from "../classes/node.class";
 import { requireAuth, requireActor } from "../auth/middleware";
+import { log, EVENT_TYPES } from "../logger";
+import { decideWritePolicy } from "./device-write-policy";
 
 // Categories a blanket "apaga todas las luces" / "apaga todo en la sala" may sweep. Deliberately the
 // switchable + dimmable + positional actuators only: the cooler is excluded (it has its own
@@ -93,20 +95,34 @@ export function initDeviceRoutes(app: Express) {
         ? { id: request.user.id, name: request.user.displayName }
         : undefined;
 
-    // Accept either a whole-value write or a channel-addressed one (Stage 4). A
-    // dashboard channel write is a user override: lock `manual` like manualTrigger
-    // does (voice/llm channel nudges stay non-locking, per the Stage-4a design).
-    // EXCEPTION: a `setting`-role channel (e.g. the cooler's `target`) is a
-    // setpoint, NOT an actuator override — latching `manual` there would freeze the
-    // closed loop that's supposed to track the new target. So settings never latch.
+    // Accept either a whole-value write or a channel-addressed one (Stage 4).
     const channelKey = request.body.channel;
     const channelRole =
       channelKey != null ? (node.channels ?? []).find((c) => c.key === channelKey)?.role : undefined;
-    const latchManual = source === "dashboard" && channelRole !== "setting";
+
+    // Decide lock semantics from "is a human behind this write?" (see decideWritePolicy):
+    // a dashboard/user-command write bypasses + latches `manual`; an agent-initiative write
+    // respects the lock. A `setting`-role channel (cooler `target`) is a setpoint — never gated,
+    // never latched (latching would freeze the closed loop that tracks the new target).
+    const { skip, latch } = decideWritePolicy({
+      source,
+      onBehalfOf: request.body.onBehalfOf,
+      nodeManual: node.manual,
+      channelRole,
+    });
+
+    // Manual lock held + no human behind this write (agent initiative, or an un-flagged gateway):
+    // drop the actuation so the user's override wins, and log it. 409 makes "did not actuate"
+    // unambiguous so the agent can never read a normal node payload back as success.
+    if (skip) {
+      log(EVENT_TYPES.info, [`Skipped ${source} actuation of ${node.name} — manual lock held (agent initiative)`]);
+      return response.status(409).send({ skipped: "manual-locked", id: node.id, name: node.name, manual: true });
+    }
+
     const write =
       channelKey != null
-        ? node.setChannel(channelKey, request.body.value, source, latchManual, undefined, actor)
-        : node.manualTrigger(request.body.value, source, actor);
+        ? node.setChannel(channelKey, request.body.value, source, latch, undefined, actor)
+        : node.manualTrigger(request.body.value, source, actor, latch);
 
     write
       .then((success) => {
@@ -122,7 +138,7 @@ export function initDeviceRoutes(app: Express) {
   // per-category-coerced value to each. Same actor/source contract as /device-update (requireActor):
   // an llm/voice source actuates without latching `manual`; a dashboard write is attributed + latches.
   app.post("/device-update-group", requireActor, (request, response) => {
-    const { value, zone, category, source: rawSource } = request.body ?? {};
+    const { value, zone, category, source: rawSource, onBehalfOf } = request.body ?? {};
     if (value === undefined || value === null) {
       return response.status(400).send({ ok: false, error: "value required" });
     }
@@ -146,23 +162,51 @@ export function initDeviceRoutes(app: Express) {
     );
 
     Promise.all(
-      targets.map((n) =>
-        n
-          .manualTrigger(coerceGroupValue(n.category, value), source, actor)
+      targets.map((n) => {
+        const base = { id: n.id, name: n.name, zone: n.zone || undefined, category: n.category };
+        // Per-node lock semantics (same policy as /device-update): an agent-initiative sweep
+        // skips manually-locked devices instead of stomping them; a dashboard/user-command sweep
+        // bypasses + latches. Skips are reported (ok:false + skipped) so the agent doesn't claim them.
+        const { skip, latch } = decideWritePolicy({ source, onBehalfOf, nodeManual: n.manual });
+        if (skip) {
+          log(EVENT_TYPES.info, [`Group: skipped ${source} actuation of ${n.name} — manual lock held`]);
+          return Promise.resolve({ ...base, ok: false, skipped: "manual-locked" as const });
+        }
+        return n
+          .manualTrigger(coerceGroupValue(n.category, value), source, actor, latch)
           .then((ok) => {
             if (ok) persistNode(n);
-            return { id: n.id, name: n.name, zone: n.zone || undefined, category: n.category, ok };
+            return { ...base, ok };
           })
-          .catch(() => ({ id: n.id, name: n.name, zone: n.zone || undefined, category: n.category, ok: false })),
-      ),
+          .catch(() => ({ ...base, ok: false }));
+      }),
     ).then((devices) => {
       response.send({
         ok: true,
         matched: targets.length,
         applied: devices.filter((d) => d.ok).length,
+        skipped: devices.filter((d: any) => d.skipped).length,
         devices,
       });
     });
+  });
+
+  // Set / clear a device's `manual` lock explicitly — the agent's (and dashboard's) "go manual /
+  // back to automatic" control. requireActor: same trusted-caller contract as /device-update. This
+  // is the graceful counterpart to the lock-respecting skip: the agent can take a device off manual
+  // (then actuate) or hand it back, instead of silently stomping — or being silently blocked by — a
+  // user override. Persisted (survives restart) and broadcast so the dashboard reflects the change.
+  app.post("/device-manual", requireActor, (request, response) => {
+    const node = findNode(request.body.id);
+    if (!node) return response.send(false);
+
+    const on = request.body.manual === true || request.body.manual === "true";
+    if (node.setManual(on)) {
+      persistNode(node);
+      io.emit("device-update", buildClientNodeData(node));
+      log(EVENT_TYPES.info, [`${node.name} manual lock ${on ? "engaged" : "released"}`]);
+    }
+    response.send(buildClientNodeData(node));
   });
 
   app.post("/device-blinds-configure", requireAuth, (request, response) => {
@@ -222,7 +266,11 @@ export function initDeviceRoutes(app: Express) {
     const clientData = buildClientNodeData(node);
     persistNode(node);
     io.emit("device-update", clientData);
-    emitDeviceState(node.toClientData(), "device");
+    // A closed-loop device (the evap-cooler) governs its own value, so its self-report is
+    // part of a chain the reactive agent stays blind to: stamp it `coveredByEffect` so the
+    // wake path drops it (true source stays "device" → memory still mines the temps). See
+    // deviceSelfReportMeta / CLOSED_LOOP_CATEGORIES.
+    emitDeviceState(node.toClientData(), "device", deviceSelfReportMeta(node.category));
     response.send(true);
   });
 }
