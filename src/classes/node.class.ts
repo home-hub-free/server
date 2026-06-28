@@ -73,6 +73,26 @@ const TIME_TO_INACTIVE = 1000 * 10;
 
 const BOOLEAN_CATEGORIES = new Set<NodeCategory>(["light", "door", "motion", "presence"]);
 
+/**
+ * Stream-capability block a camera self-declares (docs/CAMERA_VISION_PLAN.md §3.3).
+ * The hub stores it VERBATIM and exposes it on the roster so the box-side
+ * vision-service can build `http://<ip>:<port><path>` and pull the MJPEG feed. The
+ * hub never opens the stream itself — it stays control-plane only. */
+export interface CameraStream {
+  /** Transport family — currently always "mjpeg-http" (stock esp_camera server). */
+  proto: string;
+  /** Stream port (ESP32-CAM serves MJPEG on :81 by convention). */
+  port: number;
+  /** Path of the continuous multipart MJPEG feed, e.g. "/stream". */
+  path: string;
+  /** Single-JPEG snapshot path, e.g. "/capture". */
+  snapshot?: string;
+  /** Sensor framesize hint the cam booted with (e.g. "SVGA"). Tunable via /control. */
+  res?: string;
+  /** Nominal frames/sec the cam emits. */
+  fps?: number;
+}
+
 export class Node {
   /** Boot-restore hook — returns the persisted record for `id`, or undefined. */
   static loadRecord: (id: string) => any = () => undefined;
@@ -92,6 +112,12 @@ export class Node {
   public category: NodeCategory;
   public type: "boolean" | "value";
   public ip: string | null = null;
+  /** Camera-only: the self-declared stream block (§3.3). Defaults null and is
+   * repopulated on each declare heartbeat — exactly like `ip` (which the DB also
+   * does not restore). Surfaced on toClientData so the roster carries it. */
+  public stream: CameraStream | null = null;
+  /** Firmware version a device reports on declare (camera roster surfaces it). */
+  public fwVersion: string = "";
   public manual: boolean = false;
   // Empty-string (not null) defaults so mergeDBData() restores them on reconnect.
   public zone: string = "";
@@ -473,6 +499,13 @@ export class Node {
       ...(this.zone ? { zone: this.zone } : {}),
       ...(this.unit ? { unit: this.unit } : {}),
       ...(this.channels?.length ? { channels: this.channels } : {}),
+      ...(this.stream ? { stream: this.stream } : {}),
+      // Camera roster carries the device ip so the box-side vision-service can build
+      // the MJPEG pull URL (`http://<ip>:<port><path>`). Contract: vision-service/
+      // FIRMWARE_CONTRACT.md §roster + hub_client.Camera.stream_url. Camera-scoped so
+      // other categories keep their historical ip-free client shape.
+      ...(this.category === "camera" && this.ip ? { ip: this.ip } : {}),
+      ...(this.fwVersion ? { fwVersion: this.fwVersion } : {}),
       channelAware: this.channelAware ?? false,
     };
   }
@@ -516,4 +549,32 @@ export class NodeBlinds extends Node {
 function pullIp(address: string): string {
   const chunks = address.split(":");
   return chunks[chunks.length - 1];
+}
+
+/**
+ * Adopt a camera's self-declared stream-capability block + firmware version
+ * (CAMERA_VISION_PLAN §3.3). Stored verbatim on the node (so the roster carries it
+ * for the box-side vision-service) and refreshed on every declare heartbeat — the
+ * same lifecycle as `ip`. Minimal validation: a stream needs at least a `path`; a
+ * malformed block is ignored rather than throwing into the hot declare path. Pure
+ * over a `Node` + body, so it lives here (no registry/repo dependency) and the
+ * declare route imports it directly. */
+export function captureStreamDeclare(
+  node: Node,
+  body: { stream?: any; fw_version?: any },
+): void {
+  if (typeof body.fw_version === "string" && body.fw_version) {
+    node.fwVersion = body.fw_version;
+  }
+  const s = body.stream;
+  if (s && typeof s === "object" && typeof s.path === "string" && s.path) {
+    node.stream = {
+      proto: typeof s.proto === "string" ? s.proto : "mjpeg-http",
+      port: Number(s.port) || 81,
+      path: s.path,
+      ...(typeof s.snapshot === "string" ? { snapshot: s.snapshot } : {}),
+      ...(typeof s.res === "string" ? { res: s.res } : {}),
+      ...(s.fps != null && Number.isFinite(Number(s.fps)) ? { fps: Number(s.fps) } : {}),
+    };
+  }
 }

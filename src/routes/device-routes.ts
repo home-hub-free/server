@@ -17,7 +17,7 @@ import {
 } from "../handlers/node.handler";
 import { io } from "../handlers/websockets.handler";
 import { emitDeviceDeclare, emitDeviceState, EventMeta } from "../clients/ingestion";
-import { NodeBlinds } from "../classes/node.class";
+import { NodeBlinds, captureStreamDeclare } from "../classes/node.class";
 import { requireAuth, requireActor } from "../auth/middleware";
 import { log, EVENT_TYPES } from "../logger";
 import { decideWritePolicy } from "./device-write-policy";
@@ -52,7 +52,7 @@ export function initDeviceRoutes(app: Express) {
 
   // A device just connected to the network and is trying to declare/ping the server
   app.post("/device-declare", (request, response) => {
-    let { id, name, firstPing, channels } = request.body;
+    let { id, name, firstPing, channels, stream, fw_version } = request.body;
 
     let node = findNode(id);
     if (!node) {
@@ -63,6 +63,12 @@ export function initDeviceRoutes(app: Express) {
     } else {
       node.lastPing = new Date();
     }
+
+    // Camera (and any future device) declares its stream-capability block + firmware
+    // version (CAMERA_VISION_PLAN §3.3). Stored verbatim and refreshed on every
+    // declare heartbeat — the roster carries it so the box-side vision-service can
+    // build the stream URL. The hub never opens the stream itself.
+    captureStreamDeclare(node, { stream, fw_version });
 
     // Stage-3 shim: adopt self-described channels (or keep the synthesized schema).
     applyDeclaredChannels(node, channels);

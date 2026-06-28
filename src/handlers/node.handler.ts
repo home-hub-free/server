@@ -4,7 +4,6 @@ import { Node, NodeBlinds, NodeCategory, PRECISION_CATEGORIES } from "../classes
 import { isObjectBlobCategory, reconcileValueWrite, toBoolean } from "../clients/channels";
 import { NodesRepo } from "../db/nodes.repo";
 import { computeCoolerUpdates } from "../automation/cooler-controller";
-import { createStorageStream } from "./camera-storage-handler";
 
 export const NodesDB = new NodesRepo();
 
@@ -31,7 +30,7 @@ export function pullIpFromAddress(address: Request["ip"]): string {
   return chunks[chunks.length - 1];
 }
 
-/** Assign/refresh a node's IP from a request, and start the camera stream if it's a camera. */
+/** Assign/refresh a node's IP from a request. */
 export function assignNodeIp(id: string, address: string): void {
   const node = findNode(id);
   if (!node) return;
@@ -44,8 +43,10 @@ export function assignNodeIp(id: string, address: string): void {
     node.ip = ip;
     log(EVENT_TYPES.device_new_ip, [id, ip]);
   }
-
-  if (node.category === "camera") createStorageStream(node);
+  // Camera media (stream pull + recording) moved off the hub to the box-side
+  // vision-service (CAMERA_VISION_PLAN §5.4). The hub keeps the camera in the
+  // registry + stream-capability block (see captureStreamDeclare) but never opens
+  // a stream — it stays control-plane only.
 }
 
 const SENSOR_CATEGORIES = new Set<NodeCategory>(["motion", "presence", "temp/humidity"]);

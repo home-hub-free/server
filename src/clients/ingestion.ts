@@ -66,6 +66,20 @@ export interface EventMeta {
    * memory/LLM layer records *who* did a manual write, not just that the UI did.
    * Additive alongside the unchanged `source` (downstream ignores unknown fields). */
   actor?: { id: string; name: string };
+  /** WHO a camera/vision observation resolved to (docs/CAMERA_VISION_PLAN.md §5.1).
+   * Mirrors `actor`: additive + optional, so existing consumers ignore it. Stamped
+   * by the box-side vision-service (NOT the hub — the hub never sees frames) on the
+   * person/occupancy events it publishes; resolves to the SAME `users` roster as the
+   * voice envelope, differing only in `via:"face"`. `id` is a `users.id`, a
+   * `guest:<n>` handle, or null (unknown). The hub only owns the shared TYPE so any
+   * in-hub consumer (and the shared contract) understands the field. */
+  identity?: {
+    id: string | null;
+    name: string | null;
+    class: "household" | "guest" | "unknown";
+    via: "face";
+    confidence: number;
+  };
 }
 
 export interface IngestionEvent extends EventMeta {
@@ -227,6 +241,10 @@ function publish(event: IngestionEvent): void {
     // Reaction-plane hints / audit links — only present when set (D2/D6).
     ...(event.coveredByEffect !== undefined ? { coveredByEffect: event.coveredByEffect } : {}),
     ...(event.causedBy ? { causedBy: event.causedBy } : {}),
+    // Identity payload (CAMERA_VISION_PLAN §5.1). The vision-service is its own MQTT
+    // producer and stamps this directly; the hub never sees frames, so this branch is
+    // forward-compat only (no-op unless an in-hub path ever carries identity).
+    ...(event.identity ? { identity: event.identity } : {}),
   });
   c.publish(topic, payload, { qos: 0 }, (err) => {
     if (err) log(EVENT_TYPES.error, [`ingestion: publish to ${topic} failed: ${err.message}`]);

@@ -87,6 +87,26 @@ describe("ingestion envelope — honest provenance + reaction hints", () => {
     }
   });
 
+  it("a vision identity payload rides meta.identity onto the channel event (§5.1)", () => {
+    ingestion.emitSensorEvent(
+      { id: "pir-sala", sensorType: "presence", zone: "sala", value: true },
+      "device",
+      { identity: { id: "u_david", name: "David", class: "household", via: "face", confidence: 0.91 } },
+    );
+    const presence = channelPayloads("presence");
+    expect(presence.length).toBeGreaterThan(0);
+    for (const p of presence) {
+      expect(p.source).toBe("device"); // an observation, never automation/llm
+      expect(p.identity).toEqual({
+        id: "u_david",
+        name: "David",
+        class: "household",
+        via: "face",
+        confidence: 0.91,
+      });
+    }
+  });
+
   it("an effect-driven actuation is source:automation with a causedBy link", () => {
     ingestion.emitDeviceState(
       { id: "light-sala", deviceCategory: "light", zone: "sala", value: true },
