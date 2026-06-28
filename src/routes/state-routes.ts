@@ -12,6 +12,7 @@ import type { Express } from "express";
 import { deviceNodes, sensorNodes } from "../handlers/node.handler";
 import { EffectsDB } from "./effects-routes";
 import { forecast, astro, weatherLastUpdated } from "../handlers/forecast.handler";
+import { recordAmbient, ambientByZone } from "../ambient/ambient.store";
 
 interface DeviceSnap {
   id: string;
@@ -129,7 +130,24 @@ export function initStateRoutes(app: Express): void {
       // consumer depends on the legacy shape (the dashboard uses /get-effects*).
       effects: EffectsDB.summaries(),
       weather: weatherSnap(),
+      // Per-zone ambient perception digest (satellite volume/activity; later camera occupancy). Fresh
+      // zones only (TTL-pruned). The agent uses it for dynamic, zone-matched quiet-hours. Empty {} until
+      // a producer pings POST /ambient.
+      ambient: ambientByZone(),
     });
+  });
+
+  // Producer seam for ambient perception: the voice satellites (room volume/noise) and, later, the
+  // camera world-model (occupancy/activity) POST a per-zone digest here. Ephemeral + best-effort (TTL,
+  // never persisted) — a reporting route like the ESP fleet's, so it stays open (no auth). The agent
+  // reads the aggregate back inside GET /state. See ambient.store.ts.
+  app.post("/ambient", (req, res) => {
+    const digest = recordAmbient(req.body ?? {});
+    if (!digest) {
+      res.status(400).json({ ok: false, error: "ambient ping requires a non-empty 'zone'" });
+      return;
+    }
+    res.json({ ok: true, ambient: digest });
   });
 
   // Per-zone occupancy derived from the presence/motion sensors — a clean "who/what is where" the
