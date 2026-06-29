@@ -35,7 +35,7 @@ function view(row: TimerRow, now: Date) {
 export function initTimerRoutes(app: Express) {
   // Create a timer or reminder. Body: { message, minutes? | seconds? | at?, label?, zone?, kind? }.
   app.post("/timers", (req, res) => {
-    const { message, minutes, seconds, at, label, zone, kind } = req.body ?? {};
+    const { message, minutes, seconds, at, label, zone, kind, for_person, forPerson } = req.body ?? {};
     if (!message || typeof message !== "string") {
       return res.status(400).send({ ok: false, error: "message is required" });
     }
@@ -48,6 +48,8 @@ export function initTimerRoutes(app: Express) {
       message,
       label: label ?? null,
       zone: zone ?? null,
+      // Person-targeted reminder (PLAN §3.5): id or name; delivery zone is late-bound at fire time.
+      forPerson: forPerson ?? for_person ?? null,
       fireAt,
     });
     res.send({ ok: true, timer: view(row, new Date()) });

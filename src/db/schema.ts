@@ -99,6 +99,7 @@ export function applySchema(db: DatabaseType.Database): void {
       label       TEXT,                     -- activity / human label (stopwatch + optional for timers)
       message     TEXT,                     -- spoken line announced when a timer/reminder fires
       zone        TEXT,                     -- optional zone (routing / context)
+      for_person  TEXT,                     -- person-targeted reminder: their id or name; zone is late-bound
       fire_at     TEXT,                     -- ISO8601 fire time (timer/reminder); NULL for stopwatch
       started_at  TEXT NOT NULL DEFAULT (datetime('now')),  -- creation / stopwatch start
       stopped_at  TEXT,                     -- stopwatch stop time
@@ -148,5 +149,13 @@ export function applySchema(db: DatabaseType.Database): void {
   const effectsCols = db.prepare("PRAGMA table_info(effects)").all() as { name: string }[];
   if (effectsCols.some((c) => c.name === "trigger_node")) {
     db.exec("CREATE INDEX IF NOT EXISTS idx_effects_trigger ON effects(trigger_node);");
+  }
+
+  // Additive column for person-targeted reminders (PERCEPTION_TO_AGENT_PLAN §3.5). The CREATE above
+  // already carries it on a fresh DB; ALTER it onto an existing timers table (idempotent — guard on the
+  // PRAGMA so we never re-add it). SQLite ADD COLUMN is cheap and non-locking.
+  const timerCols = db.prepare("PRAGMA table_info(timers)").all() as { name: string }[];
+  if (!timerCols.some((c) => c.name === "for_person")) {
+    db.exec("ALTER TABLE timers ADD COLUMN for_person TEXT;");
   }
 }

@@ -13,6 +13,8 @@ import { deviceNodes, sensorNodes } from "../handlers/node.handler";
 import { EffectsDB } from "./effects-routes";
 import { forecast, astro, weatherLastUpdated } from "../handlers/forecast.handler";
 import { recordAmbient, ambientByZone } from "../ambient/ambient.store";
+import { recordVision } from "../ambient/vision.store";
+import { presenceByZone, liveRooms } from "../ambient/live-rooms";
 
 interface DeviceSnap {
   id: string;
@@ -130,10 +132,14 @@ export function initStateRoutes(app: Express): void {
       // consumer depends on the legacy shape (the dashboard uses /get-effects*).
       effects: EffectsDB.summaries(),
       weather: weatherSnap(),
-      // Per-zone ambient perception digest (satellite volume/activity; later camera occupancy). Fresh
-      // zones only (TTL-pruned). The agent uses it for dynamic, zone-matched quiet-hours. Empty {} until
-      // a producer pings POST /ambient.
+      // Per-zone ambient perception digest (satellite volume/activity). Fresh zones only (TTL-pruned).
+      // The agent uses it for dynamic, zone-matched quiet-hours. Empty {} until a producer pings
+      // POST /ambient. Kept untouched (the proactivity quiet-gate reads it) — `rooms` below is additive.
       ambient: ambientByZone(),
+      // FUSED per-zone world-model (PERCEPTION_TO_AGENT_PLAN §3.1): camera roster (who/how-many) + ambient
+      // (activity/noise) + PIR (fallback occupancy), reconciled into one digest the agent renders into
+      // "Who's around". Only zones with a fresh source appear. See ambient/room-digest.ts.
+      rooms: liveRooms(now.getTime()),
     });
   });
 
@@ -155,20 +161,47 @@ export function initStateRoutes(app: Express): void {
   // ANY of its presence/motion sensors reads true. Sensors with no zone are grouped under "(unzoned)".
   app.get("/presence", (req, res) => {
     const zoneParam = typeof req.query.zone === "string" ? req.query.zone.trim().toLowerCase() : undefined;
-    const presence = sensorNodes().filter((s) => s.category === "presence" || s.category === "motion");
-
-    const byZone = new Map<string, { zone: string; occupied: boolean; sensors: any[] }>();
-    for (const s of presence) {
-      const zone = s.zone || "(unzoned)";
-      if (zoneParam && zone.toLowerCase() !== zoneParam) continue;
-      const active = s.value === true;
-      const entry = byZone.get(zone) ?? { zone, occupied: false, sensors: [] };
-      entry.occupied = entry.occupied || active;
-      entry.sensors.push({ id: s.id, name: s.name, category: s.category, active });
-      byZone.set(zone, entry);
-    }
-
-    const zones = [...byZone.values()].sort((a, b) => a.zone.localeCompare(b.zone));
+    const zones = [...presenceByZone().values()]
+      .filter((z) => !zoneParam || z.zone.toLowerCase() === zoneParam)
+      .sort((a, b) => a.zone.localeCompare(b.zone));
     res.json({ ok: true, anyoneHome: zones.some((z) => z.occupied), zones });
+  });
+
+  // Producer seam for the camera world-model: the vision-service POSTs a per-zone occupancy+identity
+  // digest here on every salient change (PERCEPTION_TO_AGENT_PLAN §3.1). Like /ambient it's ephemeral +
+  // best-effort (TTL, never persisted) and stays OPEN (a reporting route, like the ESP fleet) — only
+  // resolved identity crosses, never embeddings. The hub FUSES it into GET /state `rooms`. See
+  // ambient/vision.store.ts.
+  app.post("/perception", (req, res) => {
+    const digest = recordVision(req.body ?? {});
+    if (!digest) {
+      res.status(400).json({ ok: false, error: "perception push requires a non-empty 'zone'" });
+      return;
+    }
+    res.json({ ok: true, vision: digest });
+  });
+
+  // Fused per-zone "who's around" world-model — the agent's `who_is_present` tool reads THIS instead of
+  // raw PIR, so it can answer "Juan y alguien que no reconozco", not just "occupied" (PERCEPTION_TO_AGENT
+  // _PLAN §3.1/Phase 2). Camera roster (who/how-many) ⊕ ambient (activity/noise) ⊕ PIR (fallback
+  // occupancy). Degrades to PIR-only occupancy when no camera covers a zone. Pass ?zone= for one room
+  // (then `occupied` is a definitive boolean — an absent zone means nobody there).
+  app.get("/rooms", (req, res) => {
+    const zoneParam = typeof req.query.zone === "string" ? req.query.zone.trim() : undefined;
+    const fused = liveRooms(Date.now());
+    let rooms = Object.values(fused).sort((a, b) => a.zone.localeCompare(b.zone));
+    if (zoneParam) {
+      const zl = zoneParam.toLowerCase();
+      rooms = rooms.filter((r) => r.zone.toLowerCase() === zl);
+    }
+    const people = rooms.flatMap((r) => (r.people ?? []).map((p) => ({ zone: r.zone, ...p })));
+    const out: Record<string, unknown> = {
+      ok: true,
+      anyoneHome: rooms.some((r) => r.occupied),
+      rooms,
+      people,
+    };
+    if (zoneParam) out.occupied = rooms.some((r) => r.occupied); // definitive answer for one room
+    res.json(out);
   });
 }

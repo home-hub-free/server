@@ -22,6 +22,9 @@ export interface TimerRow {
   label: string | null;
   message: string | null;
   zone: string | null;
+  /** Person-targeted reminder: their id or display name. The delivery zone is late-bound (resolved to
+   *  wherever they are at fire time); null for a general/house-wide timer. See PERCEPTION_TO_AGENT_PLAN §3.5. */
+  for_person: string | null;
   fire_at: string | null;
   started_at: string;
   stopped_at: string | null;
@@ -34,13 +37,15 @@ export interface CreateTimerInput {
   label?: string | null;
   message?: string | null;
   zone?: string | null;
+  /** Person-targeted reminder: their id or display name (late-bound zone). Omit for house-wide. */
+  forPerson?: string | null;
   /** ISO8601 fire time; required for timer/reminder, ignored for stopwatch. */
   fireAt?: string | null;
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO timers (id, kind, label, message, zone, fire_at, status)
-   VALUES (@id, @kind, @label, @message, @zone, @fire_at, @status)`,
+  `INSERT INTO timers (id, kind, label, message, zone, for_person, fire_at, status)
+   VALUES (@id, @kind, @label, @message, @zone, @for_person, @fire_at, @status)`,
 );
 const getStmt = db.prepare("SELECT * FROM timers WHERE id = ?");
 const dueStmt = db.prepare(
@@ -78,6 +83,7 @@ export class TimersRepo {
       label: input.label ?? null,
       message: input.message ?? null,
       zone: input.zone ?? null,
+      for_person: input.forPerson ?? null,
       fire_at: input.kind === "stopwatch" ? null : input.fireAt ?? null,
       status,
     });

@@ -6,7 +6,10 @@ import { requireAuth } from '../auth/middleware';
 export function initVAssistantRoutes(app: Express) {
 
   app.post('/emma-say', (request, response) => {
-    assistant.say(request.body.text, true).catch((err) => {
+    // `zone` (optional) routes the line to that room's satellite when configured (else the box) — the
+    // one zone-aware announce sink for both the agent's say/ask_user and the scheduler (PLAN §3.5).
+    const zone = typeof request.body?.zone === 'string' ? request.body.zone : undefined;
+    assistant.say(request.body.text, true, zone).catch((err) => {
       response.send(err);
     }).finally(() => response.send(true));
   });

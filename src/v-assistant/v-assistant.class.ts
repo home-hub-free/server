@@ -63,14 +63,24 @@ class VAssistant {
    * Handles the creating of the speech and queue (if necessary) for v-assistant's voice
    * @param text Text that will be read out-loud
    * @param force Force speech ignoring allowedSpeakTimeRanges validations
+   * @param zone Optional target zone (PERCEPTION_TO_AGENT_PLAN §3.5). When a zone is given AND a
+   *   satellite audio transport is configured (SATELLITE_AUDIO_URL — the node-red `satellite_audio`
+   *   handoff), the line is spoken in THAT room instead of on the box. Until the satellite HW lands, a
+   *   zoned line with no transport configured falls back to the box speaker (the zone is honored as far
+   *   as software can today). This is the one zone-aware announce sink BOTH the agent's say/ask_user and
+   *   the timer scheduler route through.
    */
-  say(text: string, force?: boolean): Promise<boolean> {
+  say(text: string, force?: boolean, zone?: string | null): Promise<boolean> {
 
     if (!this.isAllowedToSpeak() && !force) return Promise.resolve(false);
 
-    this.latestSpeeches.push(new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + ' ' + text);
+    this.latestSpeeches.push(new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString() + (zone ? ` [${zone}]` : '') + ' ' + text);
     if (this.latestSpeeches.length > 10) {
       this.latestSpeeches.shift();
+    }
+
+    if (zone && process.env.SATELLITE_AUDIO_URL) {
+      return this.routeZonedAnnounce(text, zone);
     }
 
     return new Promise((resolve, reject) => {
@@ -84,6 +94,25 @@ class VAssistant {
         this.playQueue(true);
       }
     });
+  }
+
+  /**
+   * Speak a line in a specific room via the satellite audio transport (the node-red `satellite_audio`
+   * handoff at SATELLITE_AUDIO_URL). Best-effort + fire-and-forget like the rest of the announce path —
+   * a failed handoff resolves false rather than throwing. The physical per-zone speaker is out of scope
+   * here (the satellite HW); this plumbs the zone to that transport.
+   */
+  private routeZonedAnnounce(text: string, zone: string): Promise<boolean> {
+    // Node 18+ global fetch (server tsconfig lib doesn't declare it — reach it off globalThis).
+    const f = (globalThis as any).fetch as undefined | ((url: string, init: any) => Promise<{ ok: boolean }>);
+    if (!f) return Promise.resolve(false);
+    return f(process.env.SATELLITE_AUDIO_URL as string, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, zone }),
+    })
+      .then((r) => r.ok)
+      .catch(() => false);
   }
 
   sayWeatherForecast(autoTriggered?: boolean) {
