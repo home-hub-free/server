@@ -20,6 +20,10 @@ export interface IForecastData {
   dayAvgTemp: number,
   humidityAvg: number,
   description: string,
+  // Raw WMO weather-interpretation code (0..99). `description` is its sentence; the
+  // code is kept so glanceable consumers (e.g. the dashboard hero) can map it to an
+  // icon without re-parsing prose. null until the first successful fetch.
+  weatherCode: number | null,
   isRising: boolean,
   hourlyTemperatures: number[]
 }
@@ -49,6 +53,7 @@ export let forecast: IForecastData = {
   dayAvgTemp: 0,
   humidityAvg: 0,
   description: '',
+  weatherCode: null,
   isRising: null,
   hourlyTemperatures: [],
 };
@@ -130,7 +135,11 @@ function updateForecastData(result) {
 
   forecast.minTemp = firstDaily(data, 'temperature_2m_min', 0);
   forecast.currentTemp = (data.current && data.current.temperature_2m) ?? temperatures[currentHour] ?? 0;
-  forecast.description = describeWeatherCode(firstDaily(data, 'weather_code', null));
+  // Prefer the live `current.weather_code` over the daily summary so the hero icon
+  // tracks now (e.g. clear at midday vs. an afternoon shower in the daily roll-up).
+  const code = (data.current && data.current.weather_code) ?? firstDaily(data, 'weather_code', null);
+  forecast.weatherCode = typeof code === 'number' ? code : null;
+  forecast.description = describeWeatherCode(forecast.weatherCode);
 }
 
 function updateAstroData(result) {
