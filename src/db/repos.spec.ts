@@ -285,4 +285,36 @@ describe("EffectsRepo agent surface (summaries / setEnabled / delete)", () => {
     expect(repo.summaries()).toHaveLength(0);
     expect(repo.delete(id)).toBe(false);
   });
+
+  it("update replaces one rule in place — same id, new trigger/arms — and no-ops on an unknown id", () => {
+    repo.setAll([
+      {
+        trigger: { source: "sensor", nodeId: "pir", channel: "presence" },
+        arms: [{ when: [], set: { nodeId: "light", channel: "power", value: true } }],
+        enabled: true,
+      },
+    ]);
+    const id = repo.summaries()[0].id;
+
+    const edited = {
+      trigger: { source: "sensor" as const, nodeId: "temp", channel: "temperature" },
+      arms: [
+        {
+          when: [{ kind: "sensor" as const, nodeId: "temp", channel: "temperature", op: "gt" as const, value: 26 }],
+          set: { nodeId: "cooler", channel: "fan", value: true },
+        },
+      ],
+      enabled: false,
+    };
+    expect(repo.update(id, edited)).toBe(true);
+
+    const after = repo.summaries();
+    expect(after).toHaveLength(1);
+    expect(after[0].id).toBe(id); // id (and list position) preserved
+    expect(after[0].enabled).toBe(false);
+    expect(after[0].trigger).toEqual(edited.trigger);
+    expect(after[0].arms).toEqual(edited.arms); // old empty-when arm fully replaced
+
+    expect(repo.update(999999, edited)).toBe(false);
+  });
 });

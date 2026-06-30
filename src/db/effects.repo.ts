@@ -56,6 +56,8 @@ let _selArms: ReturnType<typeof db.prepare> | undefined;
 let _selConds: ReturnType<typeof db.prepare> | undefined;
 let _delEffects: ReturnType<typeof db.prepare> | undefined;
 let _delEffectById: ReturnType<typeof db.prepare> | undefined;
+let _delArmsByEffect: ReturnType<typeof db.prepare> | undefined;
+let _updEffect: ReturnType<typeof db.prepare> | undefined;
 let _updEffectEnabled: ReturnType<typeof db.prepare> | undefined;
 let _insEffect: ReturnType<typeof db.prepare> | undefined;
 let _insArm: ReturnType<typeof db.prepare> | undefined;
@@ -78,6 +80,14 @@ const selConds = () =>
   ));
 const delEffects = () => (_delEffects ??= db.prepare("DELETE FROM effects"));
 const delEffectById = () => (_delEffectById ??= db.prepare("DELETE FROM effects WHERE id = ?"));
+const delArmsByEffect = () => (_delArmsByEffect ??= db.prepare("DELETE FROM effect_arms WHERE effect_id = ?"));
+const updEffect = () =>
+  (_updEffect ??= db.prepare(
+    `UPDATE effects SET trigger_source = @trigger_source, trigger_node = @trigger_node,
+       trigger_channel = @trigger_channel, trigger_at = @trigger_at, enabled = @enabled,
+       updated_at = datetime('now')
+     WHERE id = @id`,
+  ));
 const updEffectEnabled = () => (_updEffectEnabled ??= db.prepare("UPDATE effects SET enabled = ? WHERE id = ?"));
 const insEffect = () =>
   (_insEffect ??= db.prepare(
@@ -202,6 +212,31 @@ export class EffectsRepo {
     this.insertOne(effect);
   }
 
+  /**
+   * Replace one rule in place by id, preserving its stable row id + list position (the edit
+   * counterpart of add()'s append). The trigger + enabled flag are updated on the existing row;
+   * the arm/condition fan-out is rebuilt wholesale (delete-then-insert — simpler and safe since
+   * arms have no external references). Returns false if no rule has that id.
+   */
+  update(id: number, effect: Effect): boolean {
+    const run = db.transaction((eid: number, e: Effect): boolean => {
+      const t = e.trigger;
+      const res = updEffect().run({
+        id: eid,
+        trigger_source: t.source,
+        trigger_node: t.source === "sensor" ? t.nodeId : null,
+        trigger_channel: t.source === "sensor" ? t.channel : null,
+        trigger_at: t.source === "time" ? t.at : null,
+        enabled: e.enabled === false ? 0 : 1,
+      });
+      if (res.changes === 0) return false; // unknown id — nothing to replace
+      delArmsByEffect().run(eid); // ON DELETE CASCADE clears these arms' conditions
+      this.insertArms(eid, e.arms);
+      return true;
+    });
+    return run(id, effect);
+  }
+
   /** Delete one rule by its id (ON DELETE CASCADE clears its arms + conditions). True if a row went. */
   delete(id: number): boolean {
     return delEffectById().run(id).changes > 0;
@@ -221,8 +256,13 @@ export class EffectsRepo {
       trigger_at: t.source === "time" ? t.at : null,
       enabled: e.enabled === false ? 0 : 1,
     });
-    const effectId = Number(info.lastInsertRowid);
-    e.arms.forEach((arm, position) => {
+    this.insertArms(Number(info.lastInsertRowid), e.arms);
+  }
+
+  /** Insert an effect's arms (+ their conditions) under an existing effect id. Shared by
+   *  insertOne (append) and update (in-place replace). */
+  private insertArms(effectId: number, arms: Arm[]): void {
+    arms.forEach((arm, position) => {
       const armInfo = insArm().run({
         effect_id: effectId,
         position,

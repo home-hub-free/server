@@ -117,6 +117,17 @@ export function initEffectsRoutes(app: Express) {
     response.send(true);
   });
 
+  // Replace ONE rule in place by id (the edit counterpart of /set-effect's append). The dashboard
+  // sends the id of the rule being edited plus the full new `trigger + arms` rule; the row keeps its
+  // id + list position so the management view doesn't reshuffle on every tweak.
+  app.post("/update-effect", requireAuth, (request, response) => {
+    const id = Number(request.body?.id);
+    if (!Number.isInteger(id)) return response.status(400).send({ ok: false, error: "numeric id required" });
+    const updated = EffectsDB.update(id, toEffect(request.body?.effect));
+    if (updated) onEffectsChanged();
+    response.send({ ok: updated, id });
+  });
+
   // Delete ONE rule by its id (the symmetric undo of /set-effect — lets the assistant remove an
   // automation by voice instead of the all-or-nothing /set-effects replace). id comes from /state.
   app.post("/delete-effect", requireAuth, (request, response) => {
