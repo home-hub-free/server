@@ -12,6 +12,9 @@ import { hashPassword, newToken } from "../auth/passwords";
 
 export interface UserPrefs {
   tone?: string;
+  /** Morning-brief tuning (docs/BRIEFING_ROUTINE.md §3.5) — shape owned by briefing/driver.ts
+   *  (`BriefPrefs`): { enabled, windowStart, windowEnd, depth }. Default-on when absent. */
+  brief?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

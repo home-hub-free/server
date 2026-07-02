@@ -31,6 +31,7 @@ import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { initTimerRoutes } from "./routes/timer-routes";
 import { initAssistantChatRoutes } from "./routes/assistant-chat-routes";
 import { initTimers } from "./timers/scheduler";
+import { initBriefing } from "./briefing/driver";
 import { Bonjour } from "bonjour-service";
 import fs from "fs";
 
@@ -97,6 +98,9 @@ initDeviceLogRoutes(app);
 initTimerRoutes(app);
 // Always-on driver for user timers/reminders — fires due ones through the house speaker.
 initTimers();
+// Presence-anchored morning brief (docs/BRIEFING_ROUTINE.md) — default-on, self-gating on the
+// calendar. Skipped for sim instances: it calls out to the REAL calendar-service and can speak.
+if (!SIM) initBriefing();
 
 /**
  * Control-plane state now lives in SQLite (db/home-hub.db), opened + migrated by
