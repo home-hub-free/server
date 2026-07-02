@@ -93,6 +93,16 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
         { key: "unit-temp", role: "sensor", kind: "number", unit: "C", writable: false },
       ];
 
+    // Audio I/O endpoint (docs/VOICE_SATELLITE.md): both channels are `setting`s —
+    // never gated by / latching the manual lock (a volume tweak must not freeze
+    // automations), and `precision` (the device owns them; NVS-persisted on board,
+    // reported back via /device-value-set — the hub never pushes on first ping).
+    case "voice-satellite":
+      return [
+        { key: "volume", role: "setting", kind: "number", unit: "%", range: PCT, writable: true, precision: true },
+        { key: "mic", role: "setting", kind: "boolean", writable: true, precision: true },
+      ];
+
     // Sensor categories (Stage 4 — the unified Node world treats these the same).
     case "motion":
     case "presence":
@@ -125,7 +135,7 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
  * changed channel. Single point of truth so a new object-blob category rides along
  * everywhere the cooler does. */
 export function isObjectBlobCategory(category: string | undefined): boolean {
-  return category === "evap-cooler" || category === "presence-relay";
+  return category === "evap-cooler" || category === "presence-relay" || category === "voice-satellite";
 }
 
 /**

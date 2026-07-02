@@ -45,10 +45,14 @@ export type NodeCategory =
   | "motion"
   | "presence"
   | "presence-relay"
-  | "temp/humidity";
+  | "temp/humidity"
+  | "voice-satellite";
 
-/** Categories that own their own value — the hub never pushes on first ping. */
-export const PRECISION_CATEGORIES: NodeCategory[] = ["blinds", "camera"];
+/** Categories that own their own value — the hub never pushes on first ping.
+ * `voice-satellite` is an audio I/O endpoint, not an actuator: it declares as a
+ * device so the hub keeps its IP + zone for playback routing, but `/set` is a
+ * firmware no-op and the hub must never push state at it. */
+export const PRECISION_CATEGORIES: NodeCategory[] = ["blinds", "camera", "voice-satellite"];
 
 /** Categories whose value is governed by a hub-side closed loop — the evap-cooler's
  * `coolerControl` decides fan/water from its own drifting temps. A closed-loop device is
@@ -164,6 +168,9 @@ export class Node {
       return { fan: false, water: false, target: 26, ["unit-temp"]: 0, ["room-temp"]: 0 };
     }
     if (this.category === "presence-relay") return { presence: false, relay: false };
+    // Display defaults only — the device owns these (precision) and reports its
+    // NVS-persisted truth via /device-value-set right after boot.
+    if (this.category === "voice-satellite") return { volume: 55, mic: true };
     if (this.category === "temp/humidity") return "";
     if (this.type === "boolean") return false;
     return 0;
@@ -370,11 +377,16 @@ export class Node {
   private legacySetUrl(value: any): string {
     const url = `http://${this.ip}`;
     if (this.category === "evap-cooler") return `${url}/set?fan=${value.fan}&water=${value.water}`;
+    if (this.category === "voice-satellite") {
+      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}`;
+    }
     return `${url}/set?value=${value}`;
   }
 
   private hasChanges(newValue: any): boolean {
-    if (this.category === "evap-cooler") return true;
+    // Object-blob values stringify to "[object Object]" — a naive compare would
+    // read every write as a no-op and never notify the device.
+    if (isObjectBlobCategory(this.category)) return true;
     return String(newValue) !== String(this.value);
   }
 
@@ -502,9 +514,11 @@ export class Node {
       ...(this.stream ? { stream: this.stream } : {}),
       // Camera roster carries the device ip so the box-side vision-service can build
       // the MJPEG pull URL (`http://<ip>:<port><path>`). Contract: vision-service/
-      // FIRMWARE_CONTRACT.md §roster + hub_client.Camera.stream_url. Camera-scoped so
-      // other categories keep their historical ip-free client shape.
-      ...(this.category === "camera" && this.ip ? { ip: this.ip } : {}),
+      // FIRMWARE_CONTRACT.md §roster + hub_client.Camera.stream_url. Scoped so other
+      // categories keep their historical ip-free client shape; `voice-satellite` also
+      // carries it — the Node-RED satellite_audio delivery POSTs TTS clips to
+      // `http://<ip>/play` for the target zone (docs/VOICE_SATELLITE.md §4).
+      ...((this.category === "camera" || this.category === "voice-satellite") && this.ip ? { ip: this.ip } : {}),
       ...(this.fwVersion ? { fwVersion: this.fwVersion } : {}),
       channelAware: this.channelAware ?? false,
     };

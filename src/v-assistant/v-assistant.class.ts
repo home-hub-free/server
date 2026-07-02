@@ -69,8 +69,12 @@ class VAssistant {
    *   zoned line with no transport configured falls back to the box speaker (the zone is honored as far
    *   as software can today). This is the one zone-aware announce sink BOTH the agent's say/ask_user and
    *   the timer scheduler route through.
+   * @param expectReply The line is a QUESTION to the user (the agent's ask_user): the satellite that
+   *   plays it should open its mic for the answer afterwards — no wake name needed (follow-up listen,
+   *   docs/VOICE_SATELLITE.md §4). Only meaningful with a zoned satellite delivery; the box-speaker
+   *   fallback ignores it (the box has no per-zone mic gate to arm).
    */
-  say(text: string, force?: boolean, zone?: string | null): Promise<boolean> {
+  say(text: string, force?: boolean, zone?: string | null, expectReply?: boolean): Promise<boolean> {
 
     if (!this.isAllowedToSpeak() && !force) return Promise.resolve(false);
 
@@ -80,7 +84,7 @@ class VAssistant {
     }
 
     if (zone && process.env.SATELLITE_AUDIO_URL) {
-      return this.routeZonedAnnounce(text, zone);
+      return this.routeZonedAnnounce(text, zone, !!expectReply);
     }
 
     return new Promise((resolve, reject) => {
@@ -102,14 +106,16 @@ class VAssistant {
    * a failed handoff resolves false rather than throwing. The physical per-zone speaker is out of scope
    * here (the satellite HW); this plumbs the zone to that transport.
    */
-  private routeZonedAnnounce(text: string, zone: string): Promise<boolean> {
+  private routeZonedAnnounce(text: string, zone: string, expectReply = false): Promise<boolean> {
     // Node 18+ global fetch (server tsconfig lib doesn't declare it — reach it off globalThis).
     const f = (globalThis as any).fetch as undefined | ((url: string, init: any) => Promise<{ ok: boolean }>);
     if (!f) return Promise.resolve(false);
     return f(process.env.SATELLITE_AUDIO_URL as string, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text, zone }),
+      // expectReply rides to the delivery flow, which flags the burst's LAST clip
+      // `listen=1` so the satellite opens its mic for the answer (no wake name).
+      body: JSON.stringify({ text, zone, expectReply }),
     })
       .then((r) => r.ok)
       .catch(() => false);
