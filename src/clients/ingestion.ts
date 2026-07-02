@@ -241,6 +241,10 @@ function publish(event: IngestionEvent): void {
     // Reaction-plane hints / audit links — only present when set (D2/D6).
     ...(event.coveredByEffect !== undefined ? { coveredByEffect: event.coveredByEffect } : {}),
     ...(event.causedBy ? { causedBy: event.causedBy } : {}),
+    // WHO drove a dashboard write (EventMeta.actor). The field was typed + stamped upstream but
+    // never serialized here, so memory couldn't attribute manual actions (nor accrete its
+    // person-CONTROLS habit edges) — the documented contract needs it on the wire.
+    ...(event.actor ? { actor: event.actor } : {}),
     // Identity payload (CAMERA_VISION_PLAN §5.1). The vision-service is its own MQTT
     // producer and stamps this directly; the hub never sees frames, so this branch is
     // forward-compat only (no-op unless an in-hub path ever carries identity).

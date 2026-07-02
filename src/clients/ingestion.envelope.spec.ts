@@ -107,6 +107,33 @@ describe("ingestion envelope — honest provenance + reaction hints", () => {
     }
   });
 
+  it("a dashboard write carries meta.actor on the wire (who did the manual action)", () => {
+    // Regression: EventMeta.actor was typed + stamped by /device-update but never serialized in
+    // publish(), so memory could not attribute manual actions to a member.
+    ingestion.emitDeviceState(
+      { id: "light-sala", deviceCategory: "light", zone: "sala", value: true },
+      "dashboard",
+      { actor: { id: "u_david", name: "David" } },
+    );
+
+    const power = channelPayloads("power");
+    expect(power.length).toBeGreaterThan(0);
+    for (const p of power) {
+      expect(p.source).toBe("dashboard");
+      expect(p.actor).toEqual({ id: "u_david", name: "David" });
+    }
+  });
+
+  it("an unattributed event carries no actor field", () => {
+    ingestion.emitDeviceState(
+      { id: "light-sala", deviceCategory: "light", zone: "sala", value: true },
+      "device",
+    );
+    for (const p of channelPayloads("power")) {
+      expect(p.actor).toBeUndefined();
+    }
+  });
+
   it("an effect-driven actuation is source:automation with a causedBy link", () => {
     ingestion.emitDeviceState(
       { id: "light-sala", deviceCategory: "light", zone: "sala", value: true },
