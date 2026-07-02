@@ -29,6 +29,7 @@ import { initTimeEffects, rearmTimeEffects } from "./automation/time-scheduler-d
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
 import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { initTimerRoutes } from "./routes/timer-routes";
+import { initAssistantChatRoutes } from "./routes/assistant-chat-routes";
 import { initTimers } from "./timers/scheduler";
 import { Bonjour } from "bonjour-service";
 import fs from "fs";
@@ -86,6 +87,8 @@ setOnEffectsChanged(() => rearmTimeEffects());
 initTimeEffects();
 initStateRoutes(app);
 initVAssistantRoutes(app);
+// Auth boundary for the gateway's persisted assistant chats (owner = the signed-in member).
+initAssistantChatRoutes(app);
 initWeatherRoutes(app);
 initZonesRoutes(app);
 ensureFirmwareStore();
