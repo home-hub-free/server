@@ -89,7 +89,7 @@ export interface IngestionEvent extends EventMeta {
   value: any;
   unit: string;
   source: IngestionSource;
-  channel: "state" | "sensor" | "declare";
+  channel: "state" | "sensor" | "declare" | "camera_control";
 }
 
 /**
@@ -350,6 +350,34 @@ export function emitDeviceState(device: DeviceLike, source: IngestionSource, met
  * trigger already crystallized into an effect (D2) — true provenance stays in `source`. */
 export function emitSensorEvent(sensor: SensorLike, source: IngestionSource, meta: EventMeta = {}): void {
   emitNode(sensor.id, sensor.zone || "", sensor.value, sensor.unit || "", source, "sensor", sensorToChannels(sensor), meta);
+}
+
+/**
+ * A camera control actuation (PTZ move/preset, imaging write) proxied through the
+ * hub (docs/CAMERA_ONVIF_CONTROL_PLAN.md §2) — physical actuation, so it is audited
+ * like any device write: `source` dashboard/llm + `meta.actor` for a member session.
+ * Publishes on the dedicated `camera_control` channel, which the agent lane drops as
+ * pull-lane (an action is not a stimulus — same posture as `motion`/`occupancy`);
+ * memory keeps it for attribution/mining.
+ */
+export function emitCameraControl(
+  camId: string,
+  zone: string,
+  action: string,
+  params: Record<string, unknown>,
+  source: IngestionSource,
+  meta: EventMeta = {},
+): void {
+  emit({
+    deviceId: camId,
+    zone: zone || "",
+    ts: new Date().toISOString(),
+    value: { action, ...params },
+    unit: "",
+    source,
+    channel: "camera_control",
+    ...meta,
+  });
 }
 
 /** A device joined or its registry info (name/zone/category) changed. */

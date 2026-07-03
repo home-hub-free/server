@@ -30,6 +30,7 @@ import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-route
 import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { initTimerRoutes } from "./routes/timer-routes";
 import { initAssistantChatRoutes } from "./routes/assistant-chat-routes";
+import { initCameraRoutes } from "./routes/camera-routes";
 import { initTimers } from "./timers/scheduler";
 import { initBriefing } from "./briefing/driver";
 import { Bonjour } from "bonjour-service";
@@ -92,6 +93,8 @@ initVAssistantRoutes(app);
 initAssistantChatRoutes(app);
 initWeatherRoutes(app);
 initZonesRoutes(app);
+// Auth + audit boundary for camera PTZ/imaging control (vision-service ONVIF seam).
+initCameraRoutes(app);
 ensureFirmwareStore();
 initFirmwareRoutes(app);
 initDeviceLogRoutes(app);
