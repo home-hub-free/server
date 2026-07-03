@@ -493,6 +493,11 @@ export class Node {
     const stored = Node.loadRecord(this.id);
     if (stored) {
       Object.keys(stored).forEach((key) => {
+        // `channels` is code-owned (channelSchema) unless the device self-declared
+        // its own schema (channelAware). Restoring the persisted copy would pin the
+        // node to the schema from whenever it was last saved — a schema added in a
+        // hub upgrade (e.g. the satellite's battery channel) would never appear.
+        if (key === "channels" && !stored.channelAware) return;
         if (this[key] !== null && stored[key] !== null) this[key] = stored[key];
       });
     }

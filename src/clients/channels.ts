@@ -101,6 +101,10 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
       return [
         { key: "volume", role: "setting", kind: "number", unit: "%", range: PCT, writable: true, precision: true },
         { key: "mic", role: "setting", kind: "boolean", writable: true, precision: true },
+        // Battery % from the board's VBAT divider, self-reported ~5-min/on-change.
+        // No range on purpose: -1 = "no battery on the connector" must survive
+        // reconcileValueWrite's clamp (the dashboard hides the readout for < 0).
+        { key: "battery", role: "sensor", kind: "number", unit: "%", writable: false },
       ];
 
     // Sensor categories (Stage 4 — the unified Node world treats these the same).
