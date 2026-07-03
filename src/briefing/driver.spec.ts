@@ -75,6 +75,72 @@ describe("decideBrief", () => {
     expect(decideBrief(early, rooms, at("04:30"), undefined).action).toBe("deliver");
     expect(decideBrief(early, rooms, at("07:15"), undefined).action).toBe("quiet");
   });
+
+  // T0 defer-while-passing (VISION_CONTEXT_TIERS_PLAN §2): the rushing-past fix.
+  describe("activity gate", () => {
+    const inKitchen = (over: Partial<NonNullable<RoomDigest["people"]>[number]>, activity?: string) => {
+      const r = davidIn("cocina", over);
+      if (activity) r.activity = activity;
+      return { cocina: r };
+    };
+
+    it("defers while the zone reads passing — and does NOT deliver", () => {
+      const d = decideBrief(userOf(), inKitchen({ dwellS: 90, moving: true }, "passing"), at("07:15"), undefined);
+      expect(d).toEqual({ action: "defer", zone: "cocina", activity: "passing", dwellS: 90 });
+    });
+
+    it("defers under briefMinDwellS even when the zone is not passing", () => {
+      const d = decideBrief(userOf(), inKitchen({ dwellS: 30 }, "lingering"), at("07:15"), undefined);
+      expect(d.action).toBe("defer");
+    });
+
+    it("delivers once settled past the dwell bar, carrying the activity snapshot", () => {
+      const d = decideBrief(userOf(), inKitchen({ dwellS: 120 }, "settled+standing"), at("07:15"), undefined);
+      expect(d).toEqual({
+        action: "deliver", zone: "cocina", shared: false, activity: "settled+standing", dwellS: 120,
+      });
+    });
+
+    it("honors a per-user briefMinDwellS pref", () => {
+      const eager = userOf({ prefs: { brief: { briefMinDwellS: 10 } } });
+      expect(decideBrief(eager, inKitchen({ dwellS: 15 }, "lingering"), at("07:15"), undefined).action).toBe("deliver");
+    });
+
+    it("a zone with NO dwell/activity data keeps the old first-sighting behavior", () => {
+      expect(decideBrief(userOf(), { cocina: davidIn("cocina") }, at("07:15"), undefined).action).toBe("deliver");
+    });
+  });
+});
+
+describe("runBriefTick — defer does not latch", () => {
+  it("a passing sighting is re-evaluated next tick and delivers once settled", async () => {
+    const spoken: Array<{ text: string; zone?: string | null }> = [];
+    let dwell = 5;
+    const m = new Map<string, string>();
+    const deps: BriefTickDeps = {
+      users: () => [userOf()],
+      rooms: () => {
+        const r = davidIn("cocina", { dwellS: dwell });
+        r.activity = dwell < 45 ? "passing" : "settled";
+        return { cocina: r };
+      },
+      announce: (text, zone) => spoken.push({ text, zone }),
+      quietNote: () => {},
+      fetchers: {
+        calendarSources: async () => [{ kind: "personal" }],
+        calendarEvents: async () => [{ title: "Dentista", start: "2026-07-02T09:00" }],
+        weather: async () => null,
+      },
+      latch: { get: (id) => m.get(id), set: (id, d) => m.set(id, d) },
+    };
+    await runBriefTick(at("07:15"), deps);
+    expect(spoken).toHaveLength(0);
+    expect(m.get("david")).toBeUndefined(); // deferred, NOT latched
+    dwell = 200; // settled by the next tick
+    await runBriefTick(at("07:16"), deps);
+    expect(spoken).toHaveLength(1);
+    expect(m.get("david")).toBe("2026-07-02");
+  });
 });
 
 describe("runBriefTick", () => {

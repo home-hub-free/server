@@ -69,6 +69,21 @@ describe("roomDigest fusion", () => {
     expect(rooms.cocina.source).toEqual(["ambient"]);
   });
 
+  it("T0 zone activity + per-person dwell/posture ride the fusion untouched", () => {
+    const rooms = roomDigest({
+      ambient: {},
+      vision: { cocina: vis("cocina", { count: 1, occupied: true, activity: "settled+standing", people: [
+        { id: "u1", name: "David", cls: "household", confidence: 0.9, dwellS: 240, moving: false, posture: "standing" },
+      ] }) },
+      pir: {},
+    });
+    expect(rooms.cocina.activity).toBe("settled+standing");
+    expect(rooms.cocina.people?.[0]).toMatchObject({ dwellS: 240, posture: "standing" });
+    // A producer without T0 fields yields no activity key at all.
+    const legacy = roomDigest({ ambient: {}, vision: { sala: vis("sala", { occupied: true }) }, pir: {} });
+    expect("activity" in legacy.sala).toBe(false);
+  });
+
   it("observedAt is the most-recent contributing source", () => {
     const rooms = roomDigest({
       ambient: { sala: amb("sala", { observedAt: "2026-06-29T20:00:00.000Z" }) },

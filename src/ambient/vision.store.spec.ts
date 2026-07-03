@@ -37,6 +37,32 @@ describe("recordVision", () => {
     expect(d!.people).toEqual([]);
   });
 
+  it("carries the T0/T1 activity fields (dwell_s→dwellS, moving, posture, zone activity)", () => {
+    const d = recordVision({
+      zone: "cocina",
+      activity: "settled+standing",
+      people: [
+        { id: "u1", name: "David", class: "household", confidence: 0.9, dwell_s: 94.2, moving: false, posture: "standing" },
+        { id: null, name: null, class: "unknown", confidence: 0, dwell_s: 3.1, moving: true },
+      ],
+    });
+    expect(d!.activity).toBe("settled+standing");
+    expect(d!.people[0]).toMatchObject({ dwellS: 94.2, moving: false, posture: "standing" });
+    expect(d!.people[1]).toMatchObject({ dwellS: 3.1, moving: true });
+    expect(d!.people[1].posture).toBeUndefined();
+  });
+
+  it("drops a garbage activity/posture instead of storing it", () => {
+    const d = recordVision({
+      zone: "x",
+      activity: "sprinting",
+      people: [{ class: "household", confidence: 0.9, dwell_s: -5, posture: "backflip" }],
+    });
+    expect(d!.activity).toBeUndefined();
+    expect(d!.people[0].dwellS).toBeUndefined();
+    expect(d!.people[0].posture).toBeUndefined();
+  });
+
   it("clamps confidence and defaults an unknown/garbage class", () => {
     const d = recordVision({ zone: "x", people: [{ id: "g", class: "intruder", confidence: 9 }] });
     expect(d!.people[0].cls).toBe("unknown");

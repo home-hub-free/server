@@ -23,6 +23,9 @@ export interface RoomDigest {
   count?: number;
   /** Identity roster (confidence-gated downstream) — vision only. Omitted when no camera covers the zone. */
   people?: RoomPerson[];
+  /** T0 zone activity (VISION_CONTEXT_TIERS_PLAN §2) — "passing" | "lingering" | "settled",
+   *  optionally "+<posture>" (T1). Vision only; omitted when the producer pre-dates T0. */
+  activity?: string;
   /** 0..1 ambient activity density (satellite mic). */
   activityLevel?: number;
   /** 0..1 ambient room volume (satellite mic). */
@@ -75,6 +78,7 @@ export function roomDigest(inputs: RoomDigestInputs, now = Date.now()): Record<s
       zone,
       occupied,
       ...(v ? { count: v.count, people: v.people } : {}),
+      ...(v?.activity ? { activity: v.activity } : {}),
       ...(a?.activityLevel !== undefined ? { activityLevel: a.activityLevel } : {}),
       ...(a?.noiseLevel !== undefined ? { noiseLevel: a.noiseLevel } : {}),
       source,

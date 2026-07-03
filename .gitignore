@@ -19,3 +19,7 @@ REFACTOR.md
 
 .cache/
 .npm/
+
+# Go toolchain caches (stray HOME=./ go builds)
+/go/
+/.config/

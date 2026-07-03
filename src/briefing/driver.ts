@@ -39,12 +39,16 @@ export interface BriefPrefs {
   windowEnd?: string;
   /** Preferred depth when the room is private; a shared room always degrades to "count". */
   depth?: "full" | "count";
+  /** T0 (VISION_CONTEXT_TIERS_PLAN §2): minimum seconds in the room before the brief may
+   *  land — the "rushing past" fix. Only applies when the camera reports dwell. */
+  briefMinDwellS?: number;
 }
 
 // Same bar the gateway's prompt lane applies to a vision identity (AGENT_IDENTITY_CONF_MIN).
 const IDENTITY_CONFIDENCE_MIN = Number(process.env.BRIEF_IDENTITY_CONF_MIN ?? 0.6);
 const WINDOW_START = process.env.BRIEF_WINDOW_START ?? "05:00";
 const WINDOW_END = process.env.BRIEF_WINDOW_END ?? "11:00";
+const MIN_DWELL_S = Number(process.env.BRIEF_MIN_DWELL_S ?? 45);
 
 // One kv_config key holding { [userId]: "YYYY-MM-DD" } — the per-person daily latch (§3.6).
 const LATCH_KEY = "briefingLatch";
@@ -92,11 +96,13 @@ function windowFor(prefs: BriefPrefs): { start: number; end: number } {
 
 /** Where a user is right now per the fused world-model — but unlike the scheduler's personZone,
  *  gated on a CONFIDENT household identity (§3.6: an unknown/low-confidence face at breakfast
- *  gets nothing). `shared` marks a room with anyone else in it (the §3.4 privacy degrade). */
+ *  gets nothing). `shared` marks a room with anyone else in it (the §3.4 privacy degrade).
+ *  Carries the T0 activity snapshot (zone activity + the person's own dwell) for the
+ *  defer-while-passing gate + decision logging (VISION_CONTEXT_TIERS_PLAN §2). */
 export function confidentZone(
   rooms: Record<string, RoomDigest>,
   user: Pick<PublicUser, "id" | "displayName">,
-): { zone: string; shared: boolean } | undefined {
+): { zone: string; shared: boolean; activity?: string; dwellS?: number } | undefined {
   const id = user.id.toLowerCase();
   const name = user.displayName.trim().toLowerCase();
   for (const r of Object.values(rooms)) {
@@ -107,14 +113,22 @@ export function confidentZone(
       if (!match) continue;
       if (p.cls !== "household" || (p.confidence ?? 0) < IDENTITY_CONFIDENCE_MIN) continue;
       const count = r.count ?? r.people?.length ?? 1;
-      return { zone: r.zone, shared: count > 1 };
+      return {
+        zone: r.zone,
+        shared: count > 1,
+        ...(r.activity ? { activity: r.activity } : {}),
+        ...(p.dwellS !== undefined ? { dwellS: p.dwellS } : {}),
+      };
     }
   }
   return undefined;
 }
 
 export type BriefDecision =
-  | { action: "deliver"; zone: string; shared: boolean }
+  | { action: "deliver"; zone: string; shared: boolean; activity?: string; dwellS?: number }
+  // T0 defer-while-passing (§2): seen, but rushing past / not settled long enough. NO
+  // day-latch — the next tick re-evaluates until the window closes ("quiet" then).
+  | { action: "defer"; zone: string; activity?: string; dwellS?: number }
   | { action: "quiet" } // window closed, never seen → quiet surface
   | { action: "wait" } // window not open yet, or open but the person isn't visible yet
   | { action: "skip"; reason: string };
@@ -134,7 +148,18 @@ export function decideBrief(
   if (minutes < start) return { action: "wait" };
   if (minutes > end) return { action: "quiet" };
   const seen = confidentZone(rooms, user);
-  return seen ? { action: "deliver", zone: seen.zone, shared: seen.shared } : { action: "wait" };
+  if (!seen) return { action: "wait" };
+  // T0 gate (§2): "first confident sighting" was exactly the rushing-past failure. While
+  // the zone reads `passing`, or the person hasn't dwelled briefMinDwellS yet, DEFER —
+  // deliver only once they're actually settled in. Zones without dwell data (no camera
+  // activity fields yet) keep the old first-sighting behavior.
+  const minDwell = typeof prefs.briefMinDwellS === "number" ? prefs.briefMinDwellS : MIN_DWELL_S;
+  const passing = seen.activity?.startsWith("passing") === true;
+  const tooFresh = seen.dwellS !== undefined && seen.dwellS < minDwell;
+  if (passing || tooFresh) {
+    return { action: "defer", zone: seen.zone, activity: seen.activity, dwellS: seen.dwellS };
+  }
+  return { action: "deliver", zone: seen.zone, shared: seen.shared, activity: seen.activity, dwellS: seen.dwellS };
 }
 
 export interface BriefTickDeps {
@@ -154,6 +179,15 @@ export async function runBriefTick(now: Date, deps: BriefTickDeps): Promise<void
   for (const user of deps.users()) {
     const decision = decideBrief(user, (rooms ??= deps.rooms()), now, deps.latch.get(user.id));
     if (decision.action === "skip" || decision.action === "wait") continue;
+    if (decision.action === "defer") {
+      // §2 acceptance: log every defer with the activity snapshot; NO latch — re-evaluated
+      // next tick until they settle or the window closes.
+      log(EVENT_TYPES.info, [
+        `[brief] defer for ${user.id} @${decision.zone}`,
+        `activity=${decision.activity ?? "n/a"} dwellS=${decision.dwellS ?? "n/a"}`,
+      ]);
+      continue;
+    }
     let facts;
     try {
       facts = await assembleBrief(user.id, today, deps.fetchers);
@@ -167,6 +201,11 @@ export async function runBriefTick(now: Date, deps: BriefTickDeps): Promise<void
       const prefs = (user.prefs?.brief ?? {}) as BriefPrefs;
       if (decision.action === "deliver") {
         const depth = decision.shared ? "count" : prefs.depth === "count" ? "count" : "full";
+        // §2 acceptance: the deliver log carries the activity snapshot the gate saw.
+        log(EVENT_TYPES.info, [
+          `[brief] deliver for ${user.id} @${decision.zone}`,
+          `activity=${decision.activity ?? "n/a"} dwellS=${decision.dwellS ?? "n/a"} depth=${depth}`,
+        ]);
         try {
           deps.announce(buildBriefText(user.displayName, facts, depth), decision.zone);
         } catch {
