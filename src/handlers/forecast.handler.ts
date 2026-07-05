@@ -25,7 +25,17 @@ export interface IForecastData {
   // icon without re-parsing prose. null until the first successful fetch.
   weatherCode: number | null,
   isRising: boolean,
-  hourlyTemperatures: number[]
+  hourlyTemperatures: number[],
+  // Multi-day outlook (today + upcoming days) derived from Open-Meteo's `daily` block. One entry
+  // per day; index 0 is today. Empty until the first successful fetch. Lets the agent answer
+  // "weather for the week" from local state instead of a (useless) web_search.
+  dailyForecast: Array<{
+    date: string,          // Open-Meteo local date "YYYY-MM-DD"
+    minTemp: number,
+    maxTemp: number,
+    weatherCode: number | null,
+    description: string
+  }>
 }
 
 export interface IAstroData {
@@ -56,6 +66,7 @@ export let forecast: IForecastData = {
   weatherCode: null,
   isRising: null,
   hourlyTemperatures: [],
+  dailyForecast: [],
 };
 
 // Wall-clock of the last successful Open-Meteo fetch. null until the first success —
@@ -86,7 +97,10 @@ export function updateWeatherData(): Promise<any> {
     hourly: 'temperature_2m,relative_humidity_2m',
     daily: 'temperature_2m_min,temperature_2m_max,sunrise,sunset,weather_code',
     timezone: 'auto',
-    forecast_days: '1',
+    // A week's outlook. The daily block gives one entry per day (min/max/code) for the week view;
+    // the today-centric derivations below deliberately slice `hourly` back to the first 24 entries
+    // so bumping this never widens "today's" max/avg/rising math to the whole week.
+    forecast_days: '7',
   });
   const url = `${OpenMeteoURL}?${params.toString()}`;
   return new Promise((resolve, reject) => {
@@ -110,9 +124,11 @@ function updateForecastData(result) {
   const data = result.data;
   const currentHour = new Date().getHours();
 
-  // hourly.temperature_2m is one value per hour for the forecast day (24 entries with forecast_days=1).
-  const temperatures: number[] = (data.hourly && data.hourly.temperature_2m) || [];
-  const humidities: number[] = (data.hourly && data.hourly.relative_humidity_2m) || [];
+  // hourly.temperature_2m is one value per hour. With forecast_days=7 the full arrays span the
+  // whole week (168 entries); every derivation below is about TODAY, so slice to the first 24
+  // (hour 0..23 of day 0 with timezone=auto) before computing max/avg/rising.
+  const temperatures: number[] = ((data.hourly && data.hourly.temperature_2m) || []).slice(0, 24);
+  const humidities: number[] = ((data.hourly && data.hourly.relative_humidity_2m) || []).slice(0, 24);
   forecast.hourlyTemperatures = temperatures;
 
   // Is the temperature currently rising? Compare this hour to the next.
@@ -140,6 +156,24 @@ function updateForecastData(result) {
   const code = (data.current && data.current.weather_code) ?? firstDaily(data, 'weather_code', null);
   forecast.weatherCode = typeof code === 'number' ? code : null;
   forecast.description = describeWeatherCode(forecast.weatherCode);
+
+  // Week outlook — one row per day from the daily block (index 0 = today). `daily.time` is always
+  // returned; the min/max/code arrays line up with it. Guarded per-index so a short/absent array
+  // never throws.
+  const dTime: string[] = (data.daily && data.daily.time) || [];
+  const dMin: number[] = (data.daily && data.daily.temperature_2m_min) || [];
+  const dMax: number[] = (data.daily && data.daily.temperature_2m_max) || [];
+  const dCode: number[] = (data.daily && data.daily.weather_code) || [];
+  forecast.dailyForecast = dTime.map((date, i) => {
+    const wc = typeof dCode[i] === 'number' ? dCode[i] : null;
+    return {
+      date,
+      minTemp: dMin[i] != null ? Math.round(dMin[i]) : 0,
+      maxTemp: dMax[i] != null ? Math.round(dMax[i]) : 0,
+      weatherCode: wc,
+      description: describeWeatherCode(wc),
+    };
+  });
 }
 
 function updateAstroData(result) {

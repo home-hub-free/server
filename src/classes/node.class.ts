@@ -378,7 +378,10 @@ export class Node {
     const url = `http://${this.ip}`;
     if (this.category === "evap-cooler") return `${url}/set?fan=${value.fan}&water=${value.water}`;
     if (this.category === "voice-satellite") {
-      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}`;
+      // `flip` only when the blob carries it (camera units) — sending flip=0 to an
+      // audio-only unit is harmless but would seed the key into its reported blob.
+      const flip = value?.flip === undefined ? "" : `&flip=${value.flip ? 1 : 0}`;
+      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}`;
     }
     return `${url}/set?value=${value}`;
   }

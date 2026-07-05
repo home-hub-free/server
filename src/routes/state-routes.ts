@@ -81,6 +81,14 @@ function weatherSnap() {
     rising: forecast.isRising,
     sunrise: astro.sunrise ? localISO(astro.sunrise) : null,
     sunset: astro.sunset ? localISO(astro.sunset) : null,
+    // Multi-day outlook (today + upcoming) so the agent can answer "weather for the week" from
+    // local state. Compact per-day shape (date + low/high + description); index 0 is today.
+    daily: (forecast.dailyForecast || []).map((d) => ({
+      date: d.date,
+      min: d.minTemp,
+      max: d.maxTemp,
+      description: d.description,
+    })),
     updatedAt: localISO(weatherLastUpdated),
   };
 }
