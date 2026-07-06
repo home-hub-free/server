@@ -107,6 +107,36 @@ describe("/camera/:id control proxy", () => {
     expect(mockedEmit).not.toHaveBeenCalled();
   });
 
+  it("forwards a privacy toggle and audits WHO covered the camera", async () => {
+    mockedAxios.request.mockResolvedValueOnce({
+      status: 200, data: { cam_id: "c110", zone: "oficina", privacy: true },
+    } as any);
+    const res = fakeRes();
+    await handlers["POST /camera/:id/privacy"](
+      { params: { id: "c110" }, body: { on: true }, user: member }, res);
+    expect(mockedAxios.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "post",
+      url: "http://127.0.0.1:8130/privacy/c110",
+      data: { on: true },
+    }));
+    expect(res.statusCode).toBe(200);
+    expect(res.body.privacy).toBe(true);
+    expect(mockedEmit).toHaveBeenCalledWith(
+      "c110", "oficina", "privacy_set", { on: true },
+      "dashboard", { actor: { id: "u1", name: "David" } });
+  });
+
+  it("mirrors a vision-side 404 on privacy for an unknown camera, no audit", async () => {
+    mockedAxios.request.mockResolvedValueOnce({
+      status: 404, data: { detail: "camera not found / no worker" },
+    } as any);
+    const res = fakeRes();
+    await handlers["POST /camera/:id/privacy"](
+      { params: { id: "nope" }, body: { on: true }, user: member }, res);
+    expect(res.statusCode).toBe(404);
+    expect(mockedEmit).not.toHaveBeenCalled();
+  });
+
   it("audits an imaging write with the fields that were set", async () => {
     mockedAxios.request.mockResolvedValueOnce({
       status: 200, data: { ok: true, zone: "entrance", imaging: { brightness: 70 } },

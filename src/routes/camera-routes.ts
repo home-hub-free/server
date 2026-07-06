@@ -116,6 +116,20 @@ export function initCameraRoutes(app: Express): void {
     }
   });
 
+  // Privacy mode — the per-camera "stop streaming & recording NOW" switch. The
+  // vision-service enforces it at the camera worker (frames never reach the box);
+  // this proxy is the auth + audit boundary: WHO covered the cameras is a record
+  // worth keeping, so a successful toggle emits like any other camera actuation.
+  app.post("/camera/:id/privacy", requireAuth, async (request, response) => {
+    const on = !!request.body?.on;
+    const data = await forward(request, response, "post",
+      `/privacy/${camId(request)}`, { on });
+    if (data) {
+      const { source, meta } = attribution(request);
+      emitCameraControl(request.params.id, data.zone || "", "privacy_set", { on }, source, meta);
+    }
+  });
+
   app.post("/camera/:id/imaging", requireAuth, async (request, response) => {
     const { brightness, saturation, contrast, sharpness, ir_cut } = request.body ?? {};
     const data = await forward(request, response, "post",
