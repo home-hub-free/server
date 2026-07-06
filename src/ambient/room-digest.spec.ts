@@ -84,6 +84,23 @@ describe("roomDigest fusion", () => {
     expect("activity" in legacy.sala).toBe(false);
   });
 
+  it("T2a activity hint rides the fusion verbatim; conf defaults to low", () => {
+    const rooms = roomDigest({
+      ambient: {},
+      vision: { cocina: vis("cocina", { count: 1, occupied: true,
+        activityHint: "making breakfast or coffee", activityHintConf: "medium" }) },
+      pir: {},
+    });
+    expect(rooms.cocina.activityHint).toBe("making breakfast or coffee");
+    expect(rooms.cocina.activityHintConf).toBe("medium");
+    const bare = roomDigest({ ambient: {}, vision: { sala: vis("sala", {
+      occupied: true, activityHint: "relaxing" }) }, pir: {} });
+    expect(bare.sala.activityHintConf).toBe("low");
+    // no hint from the producer → no hint keys at all
+    const none = roomDigest({ ambient: {}, vision: { sala: vis("sala", { occupied: true }) }, pir: {} });
+    expect("activityHint" in none.sala).toBe(false);
+  });
+
   it("observedAt is the most-recent contributing source", () => {
     const rooms = roomDigest({
       ambient: { sala: amb("sala", { observedAt: "2026-06-29T20:00:00.000Z" }) },

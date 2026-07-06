@@ -52,6 +52,29 @@ describe("recordVision", () => {
     expect(d!.people[1].posture).toBeUndefined();
   });
 
+  it("carries the T2a activity hint verbatim with its confidence tier", () => {
+    const d = recordVision({
+      zone: "cocina",
+      activity: "settled+standing",
+      activity_hint: "making breakfast or coffee",
+      activity_hint_conf: "medium",
+      people: [{ id: "u1", name: "David", class: "household", confidence: 0.9, dwell_s: 94.2, moving: false }],
+    });
+    expect(d!.activityHint).toBe("making breakfast or coffee");
+    expect(d!.activityHintConf).toBe("medium");
+    // a missing/garbage conf degrades to "low", never to a stored garbage value
+    const low = recordVision({ zone: "sala", activity_hint: "relaxing", activity_hint_conf: "certain" });
+    expect(low!.activityHintConf).toBe("low");
+  });
+
+  it("drops a malformed activity hint (markup / over-long) instead of storing it", () => {
+    const d = recordVision({ zone: "x", activity_hint: "<script>alert(1)</script>" });
+    expect(d!.activityHint).toBeUndefined();
+    expect(d!.activityHintConf).toBeUndefined();
+    const long = recordVision({ zone: "x", activity_hint: "a".repeat(81) });
+    expect(long!.activityHint).toBeUndefined();
+  });
+
   it("drops a garbage activity/posture instead of storing it", () => {
     const d = recordVision({
       zone: "x",

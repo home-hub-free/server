@@ -35,6 +35,12 @@ export interface VisionDigest {
   /** T0 zone activity from the producer — "passing" | "lingering" | "settled", optionally
    *  "+<posture>" of the max-dwell person (e.g. "settled+sitting"). Absent pre-T0 producers. */
   activity?: string;
+  /** T2a (VISION_CONTEXT_TIERS_PLAN §4.2a): the producer's context-rule activity HINT
+   *  ("making breakfast or coffee"). Passed through verbatim — the producer is the single
+   *  interpretation layer; the gateway only hedges the render by `activityHintConf`. */
+  activityHint?: string;
+  /** Hint confidence tier — "medium" (rule with posture backing) or "low" (guessier). */
+  activityHintConf?: "low" | "medium";
   /** ISO timestamp the hub received the push (for staleness on the consumer side). */
   observedAt: string;
 }
@@ -46,6 +52,8 @@ export interface VisionPing {
   occupied?: unknown;
   people?: unknown;
   activity?: unknown;
+  activity_hint?: unknown;
+  activity_hint_conf?: unknown;
 }
 
 const TTL_MS = Number(process.env.VISION_TTL_MS ?? 5 * 60 * 1000); // 5m, like ambient: a gone producer goes stale
@@ -85,6 +93,10 @@ function normalizePerson(p: any): RoomPerson {
 // "passing" | "lingering" | "settled", optionally "+<posture>" (producer's zone_activity).
 const ACTIVITY_RE = /^(passing|lingering|settled)(\+(standing|sitting|lying|bent))?$/;
 
+// T2a hint: short human label from the producer's rule table — plain words only,
+// length-capped (this is prompt-bound text; a malformed push must not smuggle markup).
+const HINT_RE = /^[a-z0-9 ,'-]{1,80}$/i;
+
 export function recordVision(p: VisionPing, now = Date.now()): VisionDigest | null {
   const zone = typeof p.zone === "string" ? p.zone.trim() : "";
   if (!zone) return null;
@@ -92,12 +104,18 @@ export function recordVision(p: VisionPing, now = Date.now()): VisionDigest | nu
   const occupied = typeof p.occupied === "boolean" ? p.occupied : people.length > 0;
   const activity =
     typeof p.activity === "string" && ACTIVITY_RE.test(p.activity.trim()) ? p.activity.trim() : undefined;
+  const hint =
+    typeof p.activity_hint === "string" && HINT_RE.test(p.activity_hint.trim())
+      ? p.activity_hint.trim()
+      : undefined;
+  const hintConf = p.activity_hint_conf === "medium" ? "medium" : "low";
   const digest: VisionDigest = {
     zone,
     people,
     count: people.length,
     occupied: occupied || people.length > 0,
     ...(activity ? { activity } : {}),
+    ...(hint ? { activityHint: hint, activityHintConf: hintConf } : {}),
     observedAt: new Date(now).toISOString(),
   };
   byZone.set(zone, { digest, expiresAt: now + TTL_MS });
