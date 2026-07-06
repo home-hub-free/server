@@ -80,7 +80,13 @@ export function initDeviceRoutes(app: Express) {
       node.notify(node.value);
     }
 
-    response.send(true);
+    // Return the hub-assigned zone so the device can ADOPT it at runtime. One
+    // firmware artifact ships to the whole fleet (compile-time SAT_ZONE made every
+    // voice-satellite claim the same room — replies then routed to the wrong
+    // speaker); the dashboard-set zone is the truth and propagates within one
+    // declare heartbeat. Legacy firmwares ignore the body (HomeHubDevice::post
+    // only checks the status code), so this is a no-break change.
+    response.send({ ok: true, zone: node.zone || null });
   });
 
   // Dashboard / agent manually controls a device. Requires a logged-in user so
