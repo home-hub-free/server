@@ -1,7 +1,9 @@
 import { computeCoolerUpdates } from "./cooler-controller";
 
-// Golden parity for the cooler hysteresis (Stage 4c). These reproduce the legacy
-// applyEvapCoolerEffects behaviour the live coolerControl now delegates to.
+// Golden tests for the cooler hysteresis (Stage 4c), ported from the legacy
+// applyEvapCoolerEffects. One deliberate divergence: the unit probe measures the
+// OUTLET air (it used to sit outside), so the water HOLD no longer requires
+// unit ≥ target — a cold outlet means the pump is working, not that it should stop.
 describe("computeCoolerUpdates (evap-cooler hysteresis)", () => {
   const base = { target: 25, roomTemp: 25, unitTemp: 25, fan: false, water: false };
 
@@ -29,8 +31,12 @@ describe("computeCoolerUpdates (evap-cooler hysteresis)", () => {
       expect(computeCoolerUpdates({ ...base, water: false, roomTemp: 25, unitTemp: 25 }).water).toBe(true);
     });
 
-    it("does not start when the unit (intake) is too cool to help", () => {
+    it("does not start when the air through the unit is already cool (dry pads: outlet ≈ intake)", () => {
       expect(computeCoolerUpdates({ ...base, water: false, roomTemp: 26, unitTemp: 24 }).water).toBeUndefined();
+    });
+
+    it("keeps running while the room is warm even though the outlet air is now cold (pump working ≠ stop signal)", () => {
+      expect(computeCoolerUpdates({ ...base, water: true, roomTemp: 26, unitTemp: 18 }).water).toBeUndefined();
     });
 
     it("stops when the room falls below target - 1", () => {

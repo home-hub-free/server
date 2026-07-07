@@ -15,7 +15,7 @@
  * current relay states. All channels of the `evap-cooler` node, flattened. */
 export interface CoolerState {
   roomTemp: number; // room-temp sensor channel (°C)
-  unitTemp: number; // unit-temp sensor channel (°C) — the cooler's intake/outside temp
+  unitTemp: number; // unit-temp sensor channel (°C) — the air coming OUT of the unit (outlet/supply air; ≈ intake air while the pads are dry)
   target: number; // target setting channel (°C)
   fan: boolean; // current fan actuator state
   water: boolean; // current water actuator state
@@ -34,9 +34,12 @@ export interface CoolerUpdates {
  * Hysteresis (a ±1 °C band around `target` avoids relay chatter):
  *  - **fan**: once running, hold until the room drops to `target − 1`; once off,
  *    don't start until the room reaches `target + 1`.
- *  - **water**: needs the room warm AND the intake warm enough to actually cool —
- *    running while `room ≥ target−1 && unit ≥ target`, starting at
- *    `room ≥ target && unit ≥ target`.
+ *  - **water**: starts at `room ≥ target && unit ≥ target`. The unit probe reads the
+ *    air coming OUT of the unit: with the pump off the pads are dry, so the outlet
+ *    ≈ the incoming air — if that air is already at/below target, evaporation adds
+ *    nothing (fan-only is enough). Once the pump runs, a cold outlet is the pump
+ *    *working*, not a stop signal, so water holds on the room alone:
+ *    `room ≥ target−1`.
  */
 export function computeCoolerUpdates(state: CoolerState): CoolerUpdates {
   const fanState = state.fan
@@ -44,7 +47,7 @@ export function computeCoolerUpdates(state: CoolerState): CoolerUpdates {
     : state.roomTemp >= state.target + 1;
 
   const waterState = state.water
-    ? state.roomTemp >= state.target - 1 && state.unitTemp >= state.target
+    ? state.roomTemp >= state.target - 1
     : state.roomTemp >= state.target && state.unitTemp >= state.target;
 
   const updates: CoolerUpdates = {};

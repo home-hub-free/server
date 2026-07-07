@@ -90,6 +90,7 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
         { key: "water", role: "actuator", kind: "boolean", writable: true },
         { key: "target", role: "setting", kind: "number", unit: "C", range: { min: 16, max: 30, step: 1 }, writable: true },
         { key: "room-temp", role: "sensor", kind: "number", unit: "C", writable: false },
+        // unit-temp = the air coming OUT of the unit (outlet/supply probe, not outdoor).
         { key: "unit-temp", role: "sensor", kind: "number", unit: "C", writable: false },
       ];
 
