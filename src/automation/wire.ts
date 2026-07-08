@@ -5,6 +5,7 @@ import { nodes } from "../handlers/node.handler";
 import { EffectsDB } from "../routes/effects-routes";
 import { triggerCovers } from "./dynamic-evaluate";
 import type { SetAction } from "./effect.model";
+import { onPresenceEdge } from "./presence-power";
 import { computeSetActions } from "./run-effects";
 
 /**
@@ -34,6 +35,11 @@ export function applyEffectActions(
  */
 export function wireAutomations(): void {
   Node.automations = (node, channel, value) => {
+    // Satellite eco fast path: a presence/motion edge re-evaluates its zone's
+    // occupancy (immediate wake push / arm the empty-grace timer). Not an effect
+    // rule — it rides this hook because it fires on exactly the same sensor edges.
+    onPresenceEdge(node);
+
     const effects = EffectsDB.getAll();
 
     const actions = computeSetActions(

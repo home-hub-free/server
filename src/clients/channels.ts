@@ -106,6 +106,11 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
         // ESP32-CAM's). Only camera-equipped units ever report the key, and the
         // dashboard hides the control when it's absent from the value blob.
         { key: "flip", role: "setting", kind: "boolean", writable: true, precision: true },
+        // Presence power-save: when the zone's presence sensors report it empty
+        // (presence-power watcher, grace-debounced), the satellite sheds camera/
+        // mic/WiFi/CPU draw. This is the ENABLE switch (device-owned, NVS); the
+        // live occupancy signal is pushed separately (GET /presence on the board).
+        { key: "eco", role: "setting", kind: "boolean", writable: true, precision: true },
         // Battery % from the board's VBAT divider, self-reported ~5-min/on-change.
         // No range on purpose: -1 = "no battery on the connector" must survive
         // reconcileValueWrite's clamp (the dashboard hides the readout for < 0).

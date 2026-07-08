@@ -24,6 +24,7 @@ import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initWeatherRoutes } from "./routes/weather-routes";
 import { initEffectsRoutes, setOnEffectsChanged } from "./routes/effects-routes";
 import { initZonesRoutes } from "./routes/zones-routes";
+import { startPresencePower } from "./automation/presence-power";
 import { wireAutomations } from "./automation/wire";
 import { initTimeEffects, rearmTimeEffects } from "./automation/time-scheduler-driver";
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
@@ -84,6 +85,8 @@ initDeviceRoutes(app);
 initEffectsRoutes(app);
 // Wire the Node automation hook now that the registry + effects store exist.
 wireAutomations();
+// Satellite eco reconcile sweep (presence-power edge path rides the hook above).
+startPresencePower();
 // Arm the time-trigger one-shot scheduler, and re-arm it whenever the rule set changes.
 setOnEffectsChanged(() => rearmTimeEffects());
 initTimeEffects();

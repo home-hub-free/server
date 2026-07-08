@@ -170,7 +170,7 @@ export class Node {
     if (this.category === "presence-relay") return { presence: false, relay: false };
     // Display defaults only — the device owns these (precision) and reports its
     // NVS-persisted truth via /device-value-set right after boot.
-    if (this.category === "voice-satellite") return { volume: 55, mic: true };
+    if (this.category === "voice-satellite") return { volume: 55, mic: true, eco: true };
     if (this.category === "temp/humidity") return "";
     if (this.type === "boolean") return false;
     return 0;
@@ -381,7 +381,10 @@ export class Node {
       // `flip` only when the blob carries it (camera units) — sending flip=0 to an
       // audio-only unit is harmless but would seed the key into its reported blob.
       const flip = value?.flip === undefined ? "" : `&flip=${value.flip ? 1 : 0}`;
-      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}`;
+      // `eco` same shape: only forward it once the device has reported the key
+      // (pre-eco firmware ignores the arg anyway; this just keeps blobs honest).
+      const eco = value?.eco === undefined ? "" : `&eco=${value.eco ? 1 : 0}`;
+      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}${eco}`;
     }
     return `${url}/set?value=${value}`;
   }
