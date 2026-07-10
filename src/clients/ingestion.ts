@@ -90,6 +90,12 @@ export interface IngestionEvent extends EventMeta {
   unit: string;
   source: IngestionSource;
   channel: "state" | "sensor" | "declare" | "camera_control";
+  /** The node's category ("light", "voice-satellite", …) — additive, device state
+   * blobs only. Lets the wake seam (mqtt-to-agent + the gateway's /agent/event
+   * guard) make CATEGORY-level policy: a voice-satellite's state is telemetry
+   * about the assistant's own I/O (volume/mic/battery/eco), context like a
+   * camera, never a stimulus. Downstream consumers ignore unknown fields. */
+  deviceCategory?: string;
 }
 
 /**
@@ -238,6 +244,9 @@ function publish(event: IngestionEvent): void {
     value: event.value,
     unit: event.unit,
     source: event.source,
+    // Category rides device state blobs so the wake path can drop context
+    // categories (voice-satellite) without keying on device ids.
+    ...(event.deviceCategory ? { deviceCategory: event.deviceCategory } : {}),
     // Reaction-plane hints / audit links — only present when set (D2/D6).
     ...(event.coveredByEffect !== undefined ? { coveredByEffect: event.coveredByEffect } : {}),
     ...(event.causedBy ? { causedBy: event.causedBy } : {}),
@@ -333,17 +342,28 @@ function emitNode(
   channel: IngestionEvent["channel"],
   channels: Channel[],
   meta: EventMeta = {},
+  deviceCategory?: string,
 ): void {
   const emitted = emitChannels(id, zone, channels, source, meta);
   if (channels.length === 0 || emitted.length > 0) {
-    emit({ deviceId: id, zone, ts: new Date().toISOString(), value, unit, source, channel, ...meta });
+    emit({
+      deviceId: id,
+      zone,
+      ts: new Date().toISOString(),
+      value,
+      unit,
+      source,
+      channel,
+      ...(deviceCategory ? { deviceCategory } : {}),
+      ...meta,
+    });
   }
 }
 
 /** An actor changed value (manual, auto, or boot-restore). `meta.causedBy` links
  * an effect-driven actuation back to its trigger (D6). */
 export function emitDeviceState(device: DeviceLike, source: IngestionSource, meta: EventMeta = {}): void {
-  emitNode(device.id, device.zone || "", device.value, device.unit || "", source, "state", deviceToChannels(device), meta);
+  emitNode(device.id, device.zone || "", device.value, device.unit || "", source, "state", deviceToChannels(device), meta, device.deviceCategory);
 }
 
 /** A sensor reported a reading / state transition. `meta.coveredByEffect` marks a

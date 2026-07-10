@@ -134,6 +134,33 @@ describe("ingestion envelope — honest provenance + reaction hints", () => {
     }
   });
 
+  it("a device state blob carries deviceCategory (wake-seam category policy)", () => {
+    // The mqtt-to-agent wake filter + the gateway's /agent/event guard drop context
+    // categories (voice-satellite) by CATEGORY, not device id — the blob must say
+    // what kind of node it is.
+    ingestion.emitDeviceState(
+      { id: "sat-sala", deviceCategory: "voice-satellite", zone: "sala", value: { volume: 35, mic: true, battery: 42 } },
+      "device",
+    );
+
+    const state = channelPayloads("state");
+    expect(state.length).toBeGreaterThan(0);
+    for (const p of state) {
+      expect(p.deviceCategory).toBe("voice-satellite");
+      expect(p.source).toBe("device"); // category is additive; provenance untouched
+    }
+  });
+
+  it("a sensor blob carries no deviceCategory (device state blobs only)", () => {
+    ingestion.emitSensorEvent(
+      { id: "pir-sala", sensorType: "presence", zone: "sala", value: true },
+      "device",
+    );
+    for (const p of channelPayloads("sensor")) {
+      expect(p.deviceCategory).toBeUndefined();
+    }
+  });
+
   it("an effect-driven actuation is source:automation with a causedBy link", () => {
     ingestion.emitDeviceState(
       { id: "light-sala", deviceCategory: "light", zone: "sala", value: true },
