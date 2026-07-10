@@ -17,7 +17,9 @@ import { requireAuth } from "../auth/middleware";
 // still-running pass) never spawns a second poller for the same sensor.
 const calibrationPolls = new Set<string>();
 const CAL_POLL_INTERVAL_MS = 2000;
-const CAL_POLL_MAX_MS = 120_000; // safety cap; the firmware also bails on its own CAL_MAX_MS
+// Must outlast the firmware's own CAL_MAX_MS (240s) or the UI reverts to the
+// plain button while the device is still mid-pass.
+const CAL_POLL_MAX_MS = 300_000;
 
 /**
  * Poll a presence sensor's `GET /status` while it calibrates, relaying `cal_pct`
@@ -117,7 +119,7 @@ export function initSensorRoutes(app: Express) {
     try {
       // Firmware: POST /calibrate (non-blocking; 202 "started", 409 if a pass
       // is already running). Defaults trigger/hold/micro=3.0 on the device.
-      const deviceRes = await axios.post(`http://${node.ip}/calibrate`, {}, { timeout: 5000 });
+      const deviceRes = await axios.post(`http://${node.ip}/calibrate`, {}, { timeout: 10_000 });
       // Relay live progress to the dashboard until the pass completes (detached).
       void pollCalibrationProgress(node.id, node.ip);
       response.send(deviceRes.data ?? { ok: true });
@@ -126,8 +128,57 @@ export function initSensorRoutes(app: Express) {
       if (err.response) {
         return response.status(err.response.status).send(err.response.data);
       }
+      // Weak-RSSI units can swallow the POST's *response* while the request
+      // itself landed and started the pass (seen live: RSSI −85, 5s timeout,
+      // yet the device calibrated to 100%). Before failing the UI, probe
+      // /status once — if the pass is running, report started + poll progress.
+      try {
+        const status = (await axios.get(`http://${node.ip}/status`, { timeout: 5000 })).data;
+        if (status?.calibrating === true) {
+          void pollCalibrationProgress(node.id, node.ip);
+          return response.send({ ok: true, status: "started" });
+        }
+      } catch {
+        // Fall through to the original error.
+      }
       console.error(`Failed to calibrate sensor ${request.body.id} at ${node.ip}:`, err.message);
       response.status(500).send({ error: "Failed to reach device" });
+    }
+  });
+
+  // Toggle a presence sensor's radar debug (engineering) mode. The device
+  // streams per-gate energies while it's on and auto-reverts to normal mode
+  // after `secs` (firmware-capped), so a dropped dashboard can't strand it.
+  app.post("/sensor-debug", requireAuth, async (request, response) => {
+    const { id, on, secs } = request.body;
+    const node = findNode(id);
+    if (!node || !node.ip) {
+      return response.status(400).send({ error: "Sensor not found or IP unknown" });
+    }
+    try {
+      const qs = on === false ? "off=1" : `secs=${Number(secs) || 60}`;
+      const deviceRes = await axios.post(`http://${node.ip}/debug-bins?${qs}`, {}, { timeout: 10_000 });
+      response.send(deviceRes.data ?? { ok: true });
+    } catch (err) {
+      if (err.response) {
+        return response.status(err.response.status).send(err.response.data);
+      }
+      response.status(500).send({ error: "Failed to reach device" });
+    }
+  });
+
+  // Live per-gate radar energies for the dashboard's debug view. Plain proxy —
+  // the dashboard polls this while the detail overlay's live view is open.
+  app.get("/sensor-bins", async (request, response) => {
+    const node = findNode(String(request.query.id || ""));
+    if (!node || !node.ip) {
+      return response.status(400).send({ error: "Sensor not found or IP unknown" });
+    }
+    try {
+      const deviceRes = await axios.get(`http://${node.ip}/bins`, { timeout: 4000 });
+      response.send(deviceRes.data);
+    } catch {
+      response.status(504).send({ error: "Device did not answer" });
     }
   });
 }
