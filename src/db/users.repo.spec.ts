@@ -9,12 +9,12 @@ describe("UsersRepo + sessions", () => {
     const u = usersRepo.create({
       username: "David M",
       password: "hunter2",
-      prefs: { tone: "casual" },
+      prefs: { nickname: "D" },
     });
     expect(u.id).toBe("david-m");
     expect(u.username).toBe("David M");
     expect(u.displayName).toBe("David M");
-    expect(u.prefs).toEqual({ tone: "casual" });
+    expect(u.prefs).toEqual({ nickname: "D" });
     // PublicUser never carries the password hash.
     expect((u as any).pass_hash).toBeUndefined();
   });
@@ -42,10 +42,10 @@ describe("UsersRepo + sessions", () => {
 
   it("updates prefs and display name without touching the password", () => {
     const u = usersRepo.create({ username: "carol", password: "pw" });
-    usersRepo.updatePrefs(u.id, { tone: "formal" });
+    usersRepo.updatePrefs(u.id, { nickname: "C" });
     usersRepo.updateDisplayName(u.id, "Carol B");
     const after = usersRepo.getById(u.id)!;
-    expect(after.prefs).toEqual({ tone: "formal" });
+    expect(after.prefs).toEqual({ nickname: "C" });
     expect(after.displayName).toBe("Carol B");
     expect(verifyPassword("pw", usersRepo.getRowByUsername("carol")!.pass_hash)).toBe(true);
   });

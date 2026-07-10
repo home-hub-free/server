@@ -6,12 +6,11 @@ import { hashPassword, newToken } from "../auth/passwords";
  * style as ConfigRepo. The hub is the single front door for the dashboard, so
  * identity lives here on the always-on control plane.
  *
- * `prefs` is a small JSON blob the LLM agent reads to personalise replies
- * (currently `{ tone }`); it round-trips verbatim so new keys need no migration.
+ * `prefs` is a small JSON blob of per-user settings; it round-trips verbatim so
+ * new keys need no migration.
  */
 
 export interface UserPrefs {
-  tone?: string;
   /** Morning-brief tuning (docs/BRIEFING_ROUTINE.md §3.5) — shape owned by briefing/driver.ts
    *  (`BriefPrefs`): { enabled, windowStart, windowEnd, depth }. Default-on when absent. */
   brief?: Record<string, unknown>;

@@ -109,15 +109,14 @@ export function applySchema(db: DatabaseType.Database): void {
 
     -- Household members + login sessions. The hub owns these because it is the
     -- always-on control plane and the single front door for the dashboard. Each
-    -- user carries a prefs blob (JSON, e.g. tone) the LLM agent reads so it can
-    -- address the person by name and adapt its replies. Passwords are stored as a
-    -- scrypt hash ('salt:key' hex, see src/auth/passwords.ts) -- never plaintext.
+    -- user carries a prefs blob (JSON) for per-user settings. Passwords are stored
+    -- as a scrypt hash ('salt:key' hex, see src/auth/passwords.ts) -- never plaintext.
     CREATE TABLE IF NOT EXISTS users (
       id            TEXT PRIMARY KEY,           -- slug, e.g. 'david'
       username      TEXT NOT NULL UNIQUE,
       display_name  TEXT NOT NULL,
       pass_hash     TEXT NOT NULL,              -- scrypt 'salt:derivedKey' hex
-      prefs         TEXT NOT NULL DEFAULT '{}', -- JSON: { tone }
+      prefs         TEXT NOT NULL DEFAULT '{}', -- JSON per-user settings blob
       created_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
     -- Opaque bearer tokens minted on login; deleted on logout. No expiry (home LAN).

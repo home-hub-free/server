@@ -6,7 +6,7 @@ import { requireAuth } from "../auth/middleware";
 /**
  * Simple household login. Password + opaque bearer token; a seeded roster
  * managed in the dashboard settings (no public signup). Each user carries a
- * `prefs` blob ({ tone }) the LLM agent reads to personalise replies.
+ * `prefs` blob (JSON) of per-user settings.
  */
 export function initAuthRoutes(app: Express) {
   // ── login / session ───────────────────────────────────────────────────────
