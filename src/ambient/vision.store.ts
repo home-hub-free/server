@@ -24,6 +24,12 @@ export interface RoomPerson {
   moving?: boolean;
   /** T1 (§3): coarse body state from pose — "standing" | "sitting" | "lying" | "bent". */
   posture?: string;
+  /** SMART_FACE_ID: this identity is a position/sensor HYPOTHESIS (a still person whose
+   *  track dropped, adopted by position), not a live face read — the producer already
+   *  capped `confidence`; consumers hedge the name ("David?"). */
+  assumed?: boolean;
+  /** SMART_FACE_ID: a mid-dropout ghost (no live track), shown as fading rather than solid. */
+  pendingLeft?: boolean;
 }
 
 /** The per-zone vision digest the hub keeps (what the camera pushes, validated/normalized). */
@@ -85,6 +91,10 @@ function normalizePerson(p: any): RoomPerson {
     out.moving = p?.moving === true;
   }
   if (typeof p?.posture === "string" && POSTURES.has(p.posture)) out.posture = p.posture;
+  // SMART_FACE_ID (additive; wire key `pending_left` snake_case, `assumed` single-word,
+  // camelCase tolerated the same way dwell_s ?? dwellS is). Only carried when truthy.
+  if (p?.assumed === true) out.assumed = true;
+  if (p?.pending_left === true || p?.pendingLeft === true) out.pendingLeft = true;
   return out;
 }
 

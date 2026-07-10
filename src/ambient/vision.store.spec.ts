@@ -52,6 +52,20 @@ describe("recordVision", () => {
     expect(d!.people[1].posture).toBeUndefined();
   });
 
+  it("carries the SMART_FACE_ID assumed/pending_left hedges (additive, only when truthy)", () => {
+    const d = recordVision({
+      zone: "sala",
+      people: [
+        { id: "u1", name: "David", class: "household", confidence: 0.4, assumed: true, pending_left: true },
+        { id: "u2", name: "Ana", class: "household", confidence: 0.9 },
+      ],
+    });
+    expect(d!.people[0]).toMatchObject({ id: "u1", name: "David", assumed: true, pendingLeft: true });
+    // A live, confident read carries neither flag.
+    expect(d!.people[1].assumed).toBeUndefined();
+    expect(d!.people[1].pendingLeft).toBeUndefined();
+  });
+
   it("carries the T2a activity hint verbatim with its confidence tier", () => {
     const d = recordVision({
       zone: "cocina",
