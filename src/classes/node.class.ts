@@ -275,6 +275,14 @@ export class Node {
     io.emit("device-update", this.toClientData());
     emitDeviceState(this.asDeviceLike(), source, meta);
 
+    // HUB_SIM (bench sim stack): there is no physical fleet — treat the device round-trip as ACKed
+    // so the optimistic commit STICKS. Without this, every sim write reverted on the failed device
+    // GET, and a later /state read-back served the PRE-write value (surfaced by reflex corpus C118:
+    // a relative delta read a stale base). Prod never sets HUB_SIM.
+    if (process.env.HUB_SIM) {
+      return Promise.resolve(true);
+    }
+
     if (!this.channelAware) {
       return axios
         .get(this.legacySetUrl(value))
