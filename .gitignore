@@ -14,7 +14,6 @@ db/**.**
 storage/*
 firmware/
 ai-context.md
-AGENTS.md
 REFACTOR.md
 
 .cache/
