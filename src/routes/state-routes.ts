@@ -12,9 +12,11 @@ import type { Express } from "express";
 import { deviceNodes, sensorNodes } from "../handlers/node.handler";
 import { EffectsDB } from "./effects-routes";
 import { forecast, astro, weatherLastUpdated } from "../handlers/forecast.handler";
-import { recordAmbient, ambientByZone } from "../ambient/ambient.store";
+import { recordAmbient, ambientByZone, type AmbientDigest } from "../ambient/ambient.store";
 import { recordVision } from "../ambient/vision.store";
 import { presenceByZone, liveRooms } from "../ambient/live-rooms";
+import { dayPart } from "../ambient/daypart";
+import { speakGain } from "../ambient/speak-gain";
 
 interface DeviceSnap {
   id: string;
@@ -54,14 +56,9 @@ function localISO(d: Date): string {
   );
 }
 
-function dayPart(d: Date): "morning" | "afternoon" | "evening" | "night" {
-  const h = d.getHours();
-  if (h < 6) return "night";
-  if (h < 12) return "morning";
-  if (h < 18) return "afternoon";
-  if (h < 22) return "evening";
-  return "night";
-}
+// dayPart now lives in ../ambient/daypart.ts — speak-gain.ts's night cap needs the exact same
+// classification, and state-routes.ts importing speak-gain.ts (for the `ambient` map's speakGain
+// field, below) means speak-gain.ts importing dayPart back out of THIS file would be circular.
 
 // Compact outdoor-weather block for the agent prompt. Returns null until the first
 // successful Open-Meteo fetch (API unreachable at boot) so the agent never reasons over
@@ -91,6 +88,18 @@ function weatherSnap() {
     })),
     updatedAt: localISO(weatherLastUpdated),
   };
+}
+
+// Per-zone ambient map with each entry's `speakGain` attached (additive field, ADAPTIVE_SPEAK_VOLUME
+// plan) — see ambient/speak-gain.ts for the curve. Purely a derived read: ambientByZone() stays the
+// single source of truth for the perception fields themselves, this just decorates a copy of it.
+function ambientWithGain(now: number): Record<string, AmbientDigest & { speakGain: number }> {
+  const map = ambientByZone(now);
+  const out: Record<string, AmbientDigest & { speakGain: number }> = {};
+  for (const zone of Object.keys(map)) {
+    out[zone] = { ...map[zone], speakGain: speakGain(zone, now).gain };
+  }
+  return out;
 }
 
 export function initStateRoutes(app: Express): void {
@@ -141,9 +150,10 @@ export function initStateRoutes(app: Express): void {
       effects: EffectsDB.summaries(),
       weather: weatherSnap(),
       // Per-zone ambient perception digest (satellite volume/activity). Fresh zones only (TTL-pruned).
-      // The agent uses it for dynamic, zone-matched quiet-hours. Empty {} until a producer pings
-      // POST /ambient. Kept untouched (the proactivity quiet-gate reads it) — `rooms` below is additive.
-      ambient: ambientByZone(),
+      // Empty {} until a producer pings POST /ambient. Each entry also carries `speakGain` (additive) —
+      // the ADAPTIVE_SPEAK_VOLUME plan's per-zone reply-volume multiplier; Node-RED's delivery seam is
+      // the consumer (Phase 2). `rooms` below is additive too.
+      ambient: ambientWithGain(now.getTime()),
       // FUSED per-zone world-model (PERCEPTION_TO_AGENT_PLAN §3.1): camera roster (who/how-many) + ambient
       // (activity/noise) + PIR (fallback occupancy), reconciled into one digest the agent renders into
       // "Who's around". Only zones with a fresh source appear. See ambient/room-digest.ts.
