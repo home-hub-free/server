@@ -13,6 +13,7 @@ import {
   toBoolean,
   withChannelValue,
 } from "../clients/channels";
+import { scheduleVolumeAnnounce } from "../automation/volume-announce";
 
 /**
  * Node — the unified entity merging the legacy `Device` and `Sensor` classes
@@ -275,16 +276,22 @@ export class Node {
     io.emit("device-update", this.toClientData());
     emitDeviceState(this.asDeviceLike(), source, meta);
 
+    // SATELLITE_VOLUME_FEEDBACK (docs/plans/SATELLITE_VOLUME_FEEDBACK.md): captured
+    // BEFORE the round-trip below so it survives whichever branch actually ships the
+    // write. The announce itself only fires once that round-trip resolves `true` — see
+    // the join point at the bottom, which both branches funnel through.
+    const volumeChanged = this.isVolumeChange(previous, value);
+
+    let result: Promise<boolean>;
+
     // HUB_SIM (bench sim stack): there is no physical fleet — treat the device round-trip as ACKed
     // so the optimistic commit STICKS. Without this, every sim write reverted on the failed device
     // GET, and a later /state read-back served the PRE-write value (surfaced by reflex corpus C118:
     // a relative delta read a stale base). Prod never sets HUB_SIM.
     if (process.env.HUB_SIM) {
-      return Promise.resolve(true);
-    }
-
-    if (!this.channelAware) {
-      return axios
+      result = Promise.resolve(true);
+    } else if (!this.channelAware) {
+      result = axios
         .get(this.legacySetUrl(value))
         .then(() => {
           log(EVENT_TYPES.device_triggered, [`Node triggered ${this.name}, ${JSON.stringify(this.value, null, 2)}`]);
@@ -299,9 +306,23 @@ export class Node {
           log(EVENT_TYPES.error, [`Node not found 404, ${this.name}, ${reason}`]);
           return false;
         });
+    } else {
+      result = this.notifyChannels(value, previous, source, meta);
     }
 
-    return this.notifyChannels(value, previous, source, meta);
+    if (!volumeChanged) return result;
+    // Join point: the legacy-URL branch, notifyChannels, and even the HUB_SIM ACK all
+    // resolve through here, so one hook covers every wire shape. Gated on a truthy
+    // resolution (a failed /set — value reverted — must stay silent), a non-"system"
+    // source (boot reconcile/schedules stay silent), and the VOLUME_ANNOUNCE kill
+    // switch. The announce client itself is inert without SATELLITE_AUDIO_URL, so this
+    // firing under HUB_SIM is harmless (tests/sim/gate stay silent regardless).
+    return result.then((success) => {
+      if (success && source !== "system" && process.env.VOLUME_ANNOUNCE !== "false") {
+        scheduleVolumeAnnounce(this.id, this.zone, Number(value?.volume));
+      }
+      return success;
+    });
   }
 
   private notifyChannels(value: any, previous: any, source: IngestionSource, meta: EventMeta = {}): Promise<boolean> {
@@ -402,6 +423,19 @@ export class Node {
     // read every write as a no-op and never notify the device.
     if (isObjectBlobCategory(this.category)) return true;
     return String(newValue) !== String(this.value);
+  }
+
+  /** SATELLITE_VOLUME_FEEDBACK (docs/plans/SATELLITE_VOLUME_FEEDBACK.md): true only
+   * when this write changes a voice-satellite's `volume` field specifically.
+   * `hasChanges()` can't answer that — object blobs always compare unequal — so a
+   * mic/eco/flip-only write must not be mistaken for a volume change. Both the
+   * previous and incoming volume must be present and finite; an absent/garbage value
+   * never counts as "changed". */
+  private isVolumeChange(previous: any, next: any): boolean {
+    if (this.category !== "voice-satellite") return false;
+    const prevVolume = Number(previous?.volume);
+    const nextVolume = Number(next?.volume);
+    return Number.isFinite(prevVolume) && Number.isFinite(nextVolume) && prevVolume !== nextVolume;
   }
 
   // ── Sensor behaviours (ported from Sensor) ─────────────────────────────────
