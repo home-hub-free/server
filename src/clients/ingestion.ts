@@ -118,7 +118,21 @@ export interface ChannelEvent extends EventMeta {
 }
 
 // Default OFF: the seam exists but emits nothing unless explicitly enabled.
-const ENABLED = process.env.INGESTION_ENABLED === "true";
+//
+// HUB_SIM backstop (docs/plans/DATA_INTEGRITY_FOUNDATION.md Phase 1, closes D1): a sim
+// hub must NEVER publish to the shared broker, even if INGESTION_ENABLED leaks in true.
+// `dotenv.config()` (index.ts) loads `.env` from the process's cwd with no override of
+// already-set vars — a sim hub launched as `cd server && HUB_SIM=1 ... exec node
+// dist/index.js` (bench/gate/corpus scripts, or any ad-hoc HUB_SIM=1 probe) sits in the
+// real `server/` dir, so it picks up the real `server/.env` (INGESTION_ENABLED=true)
+// unless the launcher remembers to also pass INGESTION_ENABLED=false. The bench scripts
+// now do (belt-and-braces — see reflex/bench/corpus-reflex.sh + llm-gateway/bench/gate.sh)
+// but a forgotten override (exactly what happened: a manual HUB_SIM=1 probe outside those
+// scripts ran for ~37h publishing bench-* fixtures into prod) must stay harmless — hence
+// this line makes HUB_SIM alone sufficient to force the seam off, independent of what
+// INGESTION_ENABLED resolves to. Mirrors node.class.ts's identical guard for the ACK-skip
+// case. Prod never sets HUB_SIM, so this is a no-op there (see proof in the plan doc).
+const ENABLED = process.env.INGESTION_ENABLED === "true" && !process.env.HUB_SIM;
 const MQTT_URL = process.env.MQTT_URL || "mqtt://127.0.0.1:1883";
 
 // Per-channel thresholding (Stage 4c, see docs/DATA_CONTRACTS.md). This replaces
