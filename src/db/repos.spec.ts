@@ -8,6 +8,7 @@ import { EffectsRepo } from "./effects.repo";
 import { NodesRepo } from "./nodes.repo";
 import { migrateEffectsToNormalized, migrateEffectsToDynamic } from "./migrate";
 import { ConfigRepo } from "./config.repo";
+import type { Effect } from "../automation/effect.model";
 
 describe("DevicesRepo (simple-json-db drop-in)", () => {
   const repo = new DevicesRepo();
@@ -316,5 +317,70 @@ describe("EffectsRepo agent surface (summaries / setEnabled / delete)", () => {
     expect(after[0].arms).toEqual(edited.arms); // old empty-when arm fully replaced
 
     expect(repo.update(999999, edited)).toBe(false);
+  });
+});
+
+// D2 duplicate guard (EFFECT_CREATION_REPAIR Phase 2 step 2.2) — structural-equality
+// lookup across the stored rule set, used by /set-effect and /update-effect.
+describe("EffectsRepo.findDuplicate (D2 duplicate guard)", () => {
+  const repo = new EffectsRepo();
+
+  const ruleA: Effect = {
+    trigger: { source: "sensor", nodeId: "pir-sala", channel: "presence" },
+    arms: [
+      {
+        when: [{ kind: "sensor", nodeId: "pir-sala", channel: "presence", op: "eq", value: true }],
+        set: { nodeId: "light-sala", channel: "power", value: true },
+      },
+    ],
+    enabled: true,
+  };
+  const ruleB: Effect = {
+    trigger: { source: "time", at: "22:00" },
+    arms: [{ when: [], set: { nodeId: "lamp-hall", channel: "power", value: false } }],
+    enabled: true,
+  };
+
+  it("returns null against an empty store", () => {
+    repo.setAll([]);
+    expect(repo.findDuplicate(ruleA)).toBeNull();
+  });
+
+  it("finds the existing row's id for a structurally-identical effect", () => {
+    repo.setAll([ruleA, ruleB]);
+    const [a, b] = repo.summaries();
+    expect(repo.findDuplicate(ruleA)).toBe(a.id);
+    expect(repo.findDuplicate(ruleB)).toBe(b.id);
+  });
+
+  it("returns null for a genuinely different effect", () => {
+    repo.setAll([ruleA]);
+    expect(
+      repo.findDuplicate({
+        trigger: { source: "sensor", nodeId: "pir-other", channel: "presence" },
+        arms: [{ when: [], set: { nodeId: "light-sala", channel: "power", value: true } }],
+        enabled: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("matches regardless of the stored row's enabled state", () => {
+    repo.setAll([{ ...ruleA, enabled: false }]);
+    const id = repo.summaries()[0].id;
+    expect(repo.findDuplicate({ ...ruleA, enabled: true })).toBe(id);
+  });
+
+  it("excludeId lets an in-place edit skip flagging itself as its own duplicate", () => {
+    repo.setAll([ruleA]);
+    const id = repo.summaries()[0].id;
+    expect(repo.findDuplicate(ruleA, id)).toBeNull(); // same shape, but it's the excluded row
+    expect(repo.findDuplicate(ruleA)).toBe(id); // without excludeId, it still matches
+  });
+
+  it("excludeId only skips the named row — a duplicate of a DIFFERENT row still matches", () => {
+    repo.setAll([ruleA, ruleB]);
+    const [a, b] = repo.summaries();
+    // Editing rule B into rule A's shape (excludeId = B's own id) must still find A as a dup.
+    expect(repo.findDuplicate(ruleA, b.id)).toBe(a.id);
   });
 });

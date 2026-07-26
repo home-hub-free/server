@@ -12,6 +12,7 @@ import {
   flatListToEffects,
   flatToEffect,
 } from "../automation/effect-compat";
+import { canonicalEffect } from "../automation/effect-canonical";
 
 export interface IEffect {
   set: {
@@ -207,9 +208,27 @@ export class EffectsRepo {
     }));
   }
 
-  /** Append a single rule. */
-  add(effect: Effect): void {
-    this.insertOne(effect);
+  /** Append a single rule. Returns the new row's stable id (EFFECT_CREATION_REPAIR D2/2.3 —
+   *  /set-effect hands this back to the caller instead of a bare boolean). */
+  add(effect: Effect): number {
+    return this.insertOne(effect);
+  }
+
+  /**
+   * Find a stored rule structurally identical to `effect` (D2: same trigger + same
+   * ordered arms, each arm's conditions compared unordered, values coerced — `enabled`
+   * and id excluded from identity). Spans EVERY stored rule regardless of its enabled
+   * state, so a disabled duplicate still blocks re-adding the same rule. Pass
+   * `excludeId` when checking an in-place edit so a rule is never flagged as a
+   * duplicate of itself. Returns the existing row's id, or null when there's no match.
+   */
+  findDuplicate(effect: Effect, excludeId?: number): number | null {
+    const target = canonicalEffect(effect);
+    for (const s of this.summaries()) {
+      if (excludeId !== undefined && s.id === excludeId) continue;
+      if (canonicalEffect(s) === target) return s.id;
+    }
+    return null;
   }
 
   /**
@@ -247,7 +266,7 @@ export class EffectsRepo {
     return updEffectEnabled().run(enabled ? 1 : 0, id).changes > 0;
   }
 
-  private insertOne(e: Effect): void {
+  private insertOne(e: Effect): number {
     const t = e.trigger;
     const info = insEffect().run({
       trigger_source: t.source,
@@ -256,7 +275,9 @@ export class EffectsRepo {
       trigger_at: t.source === "time" ? t.at : null,
       enabled: e.enabled === false ? 0 : 1,
     });
-    this.insertArms(Number(info.lastInsertRowid), e.arms);
+    const effectId = Number(info.lastInsertRowid);
+    this.insertArms(effectId, e.arms);
+    return effectId;
   }
 
   /** Insert an effect's arms (+ their conditions) under an existing effect id. Shared by
