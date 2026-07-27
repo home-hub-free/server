@@ -93,6 +93,7 @@ export function buildClientSensorData(node: Node) {
     sensorType: node.category,
     ip: node.ip,
     ...(node.zone ? { zone: node.zone } : {}),
+    ...(node.category === "presence" ? { ledOnActive: node.ledOnActive } : {}),
   };
 }
 

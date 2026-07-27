@@ -84,7 +84,16 @@ export function initSensorRoutes(app: Express) {
     // within one heartbeat. No-op when already in sync. Inert for firmware that
     // doesn't yet include `value` in its declare body.
     if (value !== undefined) node.reconcile(value);
-    response.send(true);
+    // Mirror /device-declare: return the hub-owned config the device ADOPTS at
+    // runtime — the zone, and for presence sensors the activity-LED flag
+    // (dashboard Settings is the truth; one firmware artifact serves the whole
+    // fleet). Old firmware ignored the previous `true` body, so the shape
+    // change is compatible.
+    response.send({
+      ok: true,
+      zone: node.zone || null,
+      ...(node.category === "presence" ? { ledOnActive: node.ledOnActive !== false } : {}),
+    });
   });
 
   // A sensor reported a new value.

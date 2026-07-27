@@ -127,6 +127,11 @@ export class Node {
   // Empty-string (not null) defaults so mergeDBData() restores them on reconnect.
   public zone: string = "";
   public unit: string = "";
+  /** Presence-only config: light the sensor's onboard LED while it detects
+   * someone (live walk-test feedback). Hub-owned like `zone` — the device
+   * adopts it from each declare response — and toggled in the sensor edit
+   * overlay. Default ON; switched off once placement/range are dialed in. */
+  public ledOnActive: boolean = true;
   public channelAware: boolean = false;
   public channels: ChannelSpec[] = [];
   public value: any;
@@ -563,6 +568,7 @@ export class Node {
       operationalRanges: this.operationalRanges,
       ...(this.zone ? { zone: this.zone } : {}),
       ...(this.unit ? { unit: this.unit } : {}),
+      ...(this.category === "presence" ? { ledOnActive: this.ledOnActive } : {}),
       ...(this.channels?.length ? { channels: this.channels } : {}),
       ...(this.stream ? { stream: this.stream } : {}),
       // Camera roster carries the device ip so the box-side vision-service can build
