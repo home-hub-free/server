@@ -5,12 +5,15 @@ import { EVENT_TYPES, log } from '../logger';
  * Places adapter — generalizes the weather seam (forecast.handler.ts +
  * weather-routes.ts: fetch, cache, serve compact JSON, refresh lazily past a
  * staleness TTL) to a KEYED source (Google Places), spend-bounded and inert by
- * default. See docs/plans/PLACES_ADAPTER.md, pinned decisions P-A/P-B/P-D/P-H/P-I.
+ * default. See docs/plans/PLACES_ADAPTER.md, pinned decisions P-A/P-B/P-D/P-H/P-I/P-K.
  *
  * OWNERSHIP (CF15): this adapter owns facts about the PLACE (hours, location).
  * It never learns which place is "ours" — that's the memory-service personal
- * registry's job (Phase 2). Nothing here persists across process restarts
- * beyond the two in-memory caches below (by design — cheap+lazy, not durable).
+ * registry's job (Phase 2). The two in-memory caches below are cheap+lazy and
+ * deliberately NOT durable (a restart cold-starts them harmlessly) — but the
+ * monthly spend counter (P-K, below) is the one intentional exception: it
+ * PERSISTS across restarts in the hub's own SQLite (`kv_config`), because the
+ * entire point of a free-tier fuse is that a deploy/restart must never reset it.
  *
  * GUARD (P-I, mirrors src/clients/ingestion.ts's HUB_SIM/D1 pattern): both
  * `PLACES_API_KEY` and `HUB_SIM` are read ONCE at module load into top-level
@@ -23,11 +26,21 @@ import { EVENT_TYPES, log } from '../logger';
  * beforehand (see places.hub-sim.spec.ts / places.handler.spec.ts) — mutating
  * `process.env` after this module has already loaded has no effect on it.
  *
- * SPEND BOUNDS (P-H/M3): every network hop has its own request timeout (NOT
+ * SPEND BOUNDS (P-H/P-K/M3): every network hop has its own request timeout (NOT
  * copying forecast.handler.ts's timeout-less axios) and there are NO retries.
- * A cheap per-UTC-day call counter caps total network hops at
- * `PLACES_DAILY_BUDGET` (default 200); once exhausted, both entry points return
- * `null` without attempting a call.
+ * TWO independent, additive budgets gate every hop — checked, and charged, right
+ * after the key/HUB_SIM guard and the free cache-hit paths, before the actual
+ * fetch: an in-memory per-UTC-day BURST counter (`PLACES_DAILY_BUDGET`, default
+ * 200) that resets on every restart/deploy; and a SQLite-PERSISTED per-UTC-month
+ * counter (`PLACES_MONTHLY_BUDGET`, default 750) that a restart/deploy can NEVER
+ * reset — sized jointly with the daily fuse against the tightest Google Places
+ * SKU quota (Enterprise, 1,000 free calls/month): 750 + one full daily budget
+ * (200) of Pacific-billing-month boundary skew = 950 < 1,000 (see
+ * docs/plans/PLACES_ADAPTER.md pin P-K; do not raise `PLACES_DAILY_BUDGET` past
+ * 200 without re-doing that arithmetic). Either budget being exhausted, OR any
+ * monthly-counter persistence read/write failure, returns `null` without
+ * attempting the call (fail-CLOSED for billing — CF16 already makes the
+ * resulting dark/plain-default behavior safe).
  */
 
 // ── Config (read once at module load — see GUARD note above) ──────────────────────────────────
@@ -47,8 +60,14 @@ const HOME_LNG = Number(process.env.WEATHER_LONGITUDE || '-100.3899');
 const STALE_MS = Number(process.env.PLACES_CACHE_STALE_MS ?? 7 * 24 * 60 * 60 * 1000);
 const NEG_CACHE_MS = Number(process.env.PLACES_NEG_CACHE_MS ?? 6 * 60 * 60 * 1000);
 // P-H: cheap daily call budget (network hops, not "resolves" — a resolve that reaches the
-// details call spends 2).
+// details call spends 2). In-memory only — a BURST guard, resets on every restart.
 const DAILY_BUDGET = Number(process.env.PLACES_DAILY_BUDGET ?? 200);
+// P-K: persistent monthly free-tier fuse (same accounting unit as PLACES_DAILY_BUDGET — one
+// network hop). Sized against the tightest Google Places SKU (Enterprise, 1,000 free
+// calls/month) JOINTLY with PLACES_DAILY_BUDGET — see the SPEND BOUNDS header note above for
+// the boundary-skew arithmetic. Unlike DAILY_BUDGET, this one is backed by durable storage (see
+// "Monthly budget fuse" below) so a restart/deploy can never reset it.
+const MONTHLY_BUDGET = Number(process.env.PLACES_MONTHLY_BUDGET ?? 750);
 // V5: Google's `locationBias` is SOFT (out-of-circle results still come back) — this is the
 // HARD haversine cutoff applied before the uniqueness test.
 const BIAS_RADIUS_M = Number(process.env.PLACES_BIAS_RADIUS_M ?? 3000);
@@ -140,6 +159,83 @@ function isBudgetExhausted(): boolean {
 function chargeCall(): void {
   rollBudgetDay();
   budgetCount++;
+}
+
+// ── Monthly budget fuse (P-K) ───────────────────────────────────────────────────────────────
+/** Persisted shape of the monthly counter — `{month:"YYYY-MM", count}`, UTC. The ONLY state
+ *  this module keeps durable across restarts (everything else — both caches, the daily counter
+ *  above — is deliberately in-memory/lazy; see the OWNERSHIP header note). */
+export interface MonthlyBudgetState {
+  month: string;
+  count: number;
+}
+
+const MONTHLY_BUDGET_KV_KEY = 'placesMonthlyBudget';
+
+/**
+ * Lazily-constructed singleton reached via a `require("../db/config.repo")` DEFERRED to the
+ * first actual charge — never a top-level import of `../db/config.repo` itself, and especially
+ * never of the `../db` barrel (`../db/index.ts` also top-level-imports `./migrate`, which would
+ * drag migrate/effects/logger into every `jest.isolateModules()` registry this handler's specs
+ * spin up — reviewer MINOR-3). Mirrors `src/briefing/driver.ts`'s `configRepo`/`LATCH_KEY`
+ * briefingLatch pattern (a dedicated `kv_config` key holding one JSON blob) and
+ * `src/briefing/assemble.ts`'s `weather()` fetcher (the existing precedent for a lazy
+ * in-function `require` of a sibling module) — but memoized after the first construction, since
+ * "at first charge" is a ONE-TIME event, not a per-call one.
+ */
+let configRepo: { get(key: string): any; set(key: string, value: any): void } | null = null;
+function lazyConfigRepo() {
+  if (!configRepo) {
+    const { ConfigRepo } = require('../db/config.repo');
+    configRepo = new ConfigRepo();
+  }
+  return configRepo;
+}
+
+/**
+ * Monomorphic injection point for the monthly counter's persistence, mirroring `placesFetch`'s
+ * convention — specs reassign `.get`/`.set` to an in-memory fake so NO case in this module's
+ * suite ever touches a real DB. Production's default implementation routes through the lazy
+ * `ConfigRepo` singleton above.
+ */
+export const placesKv = {
+  get: (): MonthlyBudgetState | undefined => lazyConfigRepo().get(MONTHLY_BUDGET_KV_KEY),
+  set: (value: MonthlyBudgetState): void => lazyConfigRepo().set(MONTHLY_BUDGET_KV_KEY, value),
+};
+
+function utcMonthKey(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 7); // "YYYY-MM", UTC
+}
+
+/**
+ * Check-and-charge the persistent monthly budget as ONE atomic step (no `await` runs between
+ * the read and the write, so nothing else in this single-threaded process can interleave):
+ * reads the current count — a stored month different from `utcMonthKey()` (including "never
+ * charged before", i.e. `undefined`) is treated as a fresh month, count 0 — and if still under
+ * `MONTHLY_BUDGET`, increments and persists before returning `true`. Returns `false` — the
+ * caller MUST treat this as "no call" — when the budget is already at/over the cap, OR when
+ * EITHER the read OR the write throws (fail-CLOSED for billing, P-K: an unreadable/unwritable
+ * counter must never be interpreted as "budget available"; CF16 already makes the resulting
+ * dark/plain-default behavior safe).
+ */
+function chargeMonthlyBudget(): boolean {
+  const month = utcMonthKey();
+  let state: MonthlyBudgetState | undefined;
+  try {
+    state = placesKv.get();
+  } catch (err) {
+    log(EVENT_TYPES.error, [`places: monthly budget read failed, fail-closed: ${err}`]);
+    return false;
+  }
+  const count = state && state.month === month ? state.count : 0;
+  if (count >= MONTHLY_BUDGET) return false;
+  try {
+    placesKv.set({ month, count: count + 1 });
+  } catch (err) {
+    log(EVENT_TYPES.error, [`places: monthly budget write failed, fail-closed: ${err}`]);
+    return false;
+  }
+  return true;
 }
 
 // ── Haversine (V5) ──────────────────────────────────────────────────────────────────────────
@@ -280,6 +376,9 @@ export const placesFetch = { textSearch, placeDetails };
  * for a search inside `PLACES_NEG_CACHE_MS`. Guard (P-I): unset key OR `HUB_SIM` OR an exhausted
  * daily budget short-circuits to `null` with NO network call at all — checked before the
  * (free) negative-cache read even runs its lookup logic, so the fail-safe is unconditional.
+ * The persistent monthly fuse (P-K) is checked — and charged — right after the daily one, for
+ * BOTH hops (the search below and, again, the details call further down); either budget being
+ * exhausted, or a monthly-counter persistence failure, is the same "no call" outcome.
  */
 export async function resolvePlace(query: string): Promise<PlaceFact | null> {
   if (!KEY_PRESENT || SIM) return null;
@@ -288,6 +387,7 @@ export async function resolvePlace(query: string): Promise<PlaceFact | null> {
   if (negExpiry !== undefined && Date.now() < negExpiry) return null;
 
   if (isBudgetExhausted()) return null;
+  if (!chargeMonthlyBudget()) return null; // P-K — after the daily guard, before the hop
 
   let candidates: PlaceCandidate[];
   try {
@@ -314,8 +414,10 @@ export async function resolvePlace(query: string): Promise<PlaceFact | null> {
   // Budget may have been exhausted BY the search call just above (a full resolve spends 2) —
   // re-check before the second network hop so an over-budget day never spends a details call
   // either, matching P-H's "over budget -> return null without a call" for EVERY hop, not just
-  // the first.
+  // the first. Same "every hop, not just the first" rule applies to the monthly fuse (P-K) —
+  // charging it again here is what the (f) mid-resolve-exhaustion spec case proves.
   if (isBudgetExhausted()) return null;
+  if (!chargeMonthlyBudget()) return null;
 
   let details: PlaceDetailsResult | null;
   try {
@@ -343,7 +445,8 @@ export async function resolvePlace(query: string): Promise<PlaceFact | null> {
 /**
  * Read a KNOWN place's current hours — details-only (no search). Lazy refresh (P-B): a cache
  * hit fresher than `PLACES_CACHE_STALE_MS` is returned WITHOUT any network call (free, so it is
- * never blocked by the daily budget); only a stale-or-missing entry spends a details call.
+ * never blocked by EITHER budget — P-H's daily counter or P-K's persistent monthly one); only a
+ * stale-or-missing entry spends a details call, gated by both in sequence.
  * Guard (P-I) applies first, same as `resolvePlace`.
  */
 export async function refreshPlace(placeId: string): Promise<PlaceFact | null> {
@@ -351,10 +454,11 @@ export async function refreshPlace(placeId: string): Promise<PlaceFact | null> {
 
   const cached = placeCache.get(placeId);
   if (cached && Date.now() - cached.fetchedAt < STALE_MS) {
-    return cached.fact;
+    return cached.fact; // free — never gated by EITHER budget (P-B/P-K cache-before-budget)
   }
 
   if (isBudgetExhausted()) return null;
+  if (!chargeMonthlyBudget()) return null;
 
   let details: PlaceDetailsResult | null;
   try {
