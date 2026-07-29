@@ -22,6 +22,7 @@ import http from "http";
 import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initWeatherRoutes } from "./routes/weather-routes";
+import { initPlacesRoutes } from "./routes/places-routes";
 import { initEffectsRoutes, setOnEffectsChanged } from "./routes/effects-routes";
 import { initZonesRoutes } from "./routes/zones-routes";
 import { startPresencePower } from "./automation/presence-power";
@@ -95,6 +96,7 @@ initVAssistantRoutes(app);
 // Auth boundary for the gateway's persisted assistant chats (owner = the signed-in member).
 initAssistantChatRoutes(app);
 initWeatherRoutes(app);
+initPlacesRoutes(app);
 initZonesRoutes(app);
 // Auth + audit boundary for camera PTZ/imaging control (vision-service ONVIF seam).
 initCameraRoutes(app);
