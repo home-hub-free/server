@@ -311,6 +311,12 @@ export async function resolvePlace(query: string): Promise<PlaceFact | null> {
 
   const candidate = inRadius[0];
 
+  // Budget may have been exhausted BY the search call just above (a full resolve spends 2) —
+  // re-check before the second network hop so an over-budget day never spends a details call
+  // either, matching P-H's "over budget -> return null without a call" for EVERY hop, not just
+  // the first.
+  if (isBudgetExhausted()) return null;
+
   let details: PlaceDetailsResult | null;
   try {
     chargeCall();

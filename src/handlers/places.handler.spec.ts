@@ -241,4 +241,24 @@ describe('places.handler — daily call budget (P-H)', () => {
     expect(second).toBeNull();
     expect(textSearch).toHaveBeenCalledTimes(1); // budget exhausted — no second fetch attempted
   });
+
+  it('(g2) budget exhausted BETWEEN the search and details hop of the SAME resolve → no details call', async () => {
+    // A resolve that reaches a single in-radius candidate still spends the search hop's charge
+    // before it gets there — with a budget of 1, that charge alone exhausts the day, so the
+    // details call (the second hop of this SAME resolve) must be skipped too (P-H applies the
+    // "over budget -> no call" rule per hop, not just once at entry).
+    const mod = freshModule({ PLACES_API_KEY: 'test-key', PLACES_DAILY_BUDGET: '1' });
+    const textSearch = jest
+      .fn()
+      .mockResolvedValue([{ placeId: 'place-1', name: 'Banco Cercano', lat: HOME.lat, lng: HOME.lng }]);
+    const placeDetails = jest.fn();
+    mod.placesFetch.textSearch = textSearch;
+    mod.placesFetch.placeDetails = placeDetails;
+
+    const result = await mod.resolvePlace('banco cercano');
+
+    expect(result).toBeNull();
+    expect(textSearch).toHaveBeenCalledTimes(1);
+    expect(placeDetails).not.toHaveBeenCalled();
+  });
 });
