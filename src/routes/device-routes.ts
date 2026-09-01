@@ -1,5 +1,6 @@
 import { Express } from "express";
 import { PRECISION_CATEGORIES, NodeCategory, deviceSelfReportMeta } from "../classes/node.class";
+import { reconcileValueWrite } from "../clients/channels";
 import {
   nodes,
   findNode,
@@ -241,6 +242,49 @@ export function initDeviceRoutes(app: Express) {
         break;
     }
     response.send(true);
+  });
+
+  // Curate a voice-satellite's sleep-sound layer mix (docs/plans/SATELLITE_SLEEP_
+  // SOUNDS.md) — the R3 sibling of /device-blinds-configure: device CURATION, not
+  // actuation. Deliberately off the channel bus (the mix isn't a ChannelSpec — see
+  // channelSchema's `noise` comment), so this must never latch the `manual` lock
+  // (a slider drag would freeze the node's own noise automations) and must never
+  // touch `volume` (which would misfire the spoken volume-announce, locked
+  // decision 5) — routing the write through node.notify() directly, bypassing
+  // manualTrigger/setChannel entirely, is what keeps both guarantees.
+  // Body: { id, layers?: {id,on,level}[], level?: 0-100, timerMin?: 0-720 }.
+  app.post("/device-noise-mix", requireAuth, async (request, response) => {
+    const { id, layers, level, timerMin } = request.body ?? {};
+    const node = findNode(id);
+    if (!node || node.category !== "voice-satellite") return response.send(false);
+
+    const partial: { noiseLayers?: unknown[]; noiseLevel?: number; noiseTimerMin?: number } = {};
+    if (Array.isArray(layers) && layers.every((l: any) => l && typeof l.id === "string")) {
+      partial.noiseLayers = layers;
+    }
+    if (level !== undefined) {
+      const n = Number(level);
+      if (Number.isFinite(n)) partial.noiseLevel = Math.min(100, Math.max(0, Math.round(n)));
+    }
+    if (timerMin !== undefined) {
+      const n = Number(timerMin);
+      if (Number.isFinite(n)) partial.noiseTimerMin = Math.min(720, Math.max(0, Math.round(n)));
+    }
+
+    const next = reconcileValueWrite(node.category, node.value, partial);
+    // Same actor derivation /device-update uses — this route is dashboard-only
+    // (requireAuth), so a resolved session is the only source of an actor.
+    const actor: EventMeta["actor"] = request.user
+      ? { id: request.user.id, name: request.user.displayName }
+      : undefined;
+
+    try {
+      const success = await node.notify(next, "dashboard", { actor });
+      if (success) persistNode(node);
+      response.send(buildClientNodeData(node));
+    } catch {
+      response.send(false);
+    }
   });
 
   // Save device config (name, ranges, zone, etc.) — lives in the DB.

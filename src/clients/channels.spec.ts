@@ -1,4 +1,4 @@
-import { buildSetRequests, channelValue, deviceToChannels, reconcileValueWrite, sensorToChannels, withChannelValue } from "./channels";
+import { buildSetRequests, channelValue, deviceToChannels, encodeNoiseLayers, reconcileValueWrite, sensorToChannels, withChannelValue } from "./channels";
 
 describe("channel projection (Stage 1 data-contract redesign)", () => {
   describe("deviceToChannels", () => {
@@ -258,6 +258,77 @@ describe("channel projection (Stage 1 data-contract redesign)", () => {
     it("scalar (non-object-blob) categories replace as before", () => {
       expect(reconcileValueWrite("light", true, false)).toBe(false);
       expect(reconcileValueWrite("dimmable-light", 80, 40)).toBe(40);
+    });
+  });
+
+  describe("voice-satellite sleep sounds (docs/plans/SATELLITE_SLEEP_SOUNDS.md)", () => {
+    it("channelSchema exposes noise as a writable setting channel (6 total)", () => {
+      const specs = deviceToChannels({
+        id: "sat1",
+        deviceCategory: "voice-satellite",
+        value: { volume: 55, mic: true, eco: true, battery: 80, noise: true },
+      });
+      expect(specs).toHaveLength(6);
+      expect(specs.find((s) => s.key === "noise")).toMatchObject({
+        role: "setting",
+        kind: "boolean",
+        writable: true,
+        precision: true,
+        value: true,
+      });
+    });
+
+    it("channelValue reads the noise toggle out of the blob", () => {
+      expect(channelValue("voice-satellite", "noise", { noise: true })).toBe(true);
+      expect(channelValue("voice-satellite", "noise", { noise: false })).toBe(false);
+    });
+
+    it("reconcileValueWrite replaces noiseLayers wholesale without disturbing volume/mic/battery", () => {
+      const previous = {
+        volume: 55,
+        mic: true,
+        eco: true,
+        battery: 80,
+        noise: true,
+        noiseLevel: 60,
+        noiseTimerMin: 0,
+        noiseLayers: [{ id: "pink", on: true, level: 45 }],
+      };
+      const next = reconcileValueWrite("voice-satellite", previous, {
+        noiseLayers: [{ id: "rain", on: true, level: 35 }],
+      });
+      expect(next.noiseLayers).toEqual([{ id: "rain", on: true, level: 35 }]);
+      expect(next.volume).toBe(55);
+      expect(next.mic).toBe(true);
+      expect(next.battery).toBe(80);
+    });
+
+    describe("encodeNoiseLayers (R4 — complete + authoritative CSV)", () => {
+      it("encodes on/off layers with the '-' off-prefix", () => {
+        expect(
+          encodeNoiseLayers([
+            { id: "pink", on: true, level: 45 },
+            { id: "rain", on: false, level: 35 },
+          ]),
+        ).toBe("pink:45,-rain:35");
+      });
+
+      it("clamps an out-of-range level and defaults a non-finite one to 0", () => {
+        expect(encodeNoiseLayers([{ id: "fan", on: true, level: 150 }])).toBe("fan:100");
+        expect(encodeNoiseLayers([{ id: "fan", on: true, level: -5 }])).toBe("fan:0");
+        expect(encodeNoiseLayers([{ id: "fan", on: true, level: "garbage" as any }])).toBe("fan:0");
+      });
+
+      it("returns undefined for an empty array or undefined input", () => {
+        expect(encodeNoiseLayers([])).toBeUndefined();
+        expect(encodeNoiseLayers(undefined)).toBeUndefined();
+      });
+
+      it("ignores entries without a string id", () => {
+        expect(
+          encodeNoiseLayers([{ on: true, level: 50 }, { id: "ocean", on: true, level: 40 }]),
+        ).toBe("ocean:40");
+      });
     });
   });
 });

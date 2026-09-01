@@ -111,6 +111,14 @@ export function channelSchema(category: string | undefined): ChannelSpec[] | nul
         // mic/WiFi/CPU draw. This is the ENABLE switch (device-owned, NVS); the
         // live occupancy signal is pushed separately (GET /presence on the board).
         { key: "eco", role: "setting", kind: "boolean", writable: true, precision: true },
+        // Master sleep-sound toggle (docs/plans/SATELLITE_SLEEP_SOUNDS.md). `setting`,
+        // not `actuator`, on purpose (R2): an actuator-role dashboard write latches the
+        // `manual` lock (device-write-policy.ts), which would freeze the node's OWN
+        // noise automations — an effect arming this toggle would immediately disable
+        // itself. The layer mix (which layers are on, at what level) is deliberately
+        // NOT a channel (R3) — it rides its own curation route, POST /device-noise-mix,
+        // the same family as /device-blinds-configure.
+        { key: "noise", role: "setting", kind: "boolean", writable: true, precision: true },
         // Battery % from the board's VBAT divider, self-reported ~5-min/on-change.
         // No range on purpose: -1 = "no battery on the connector" must survive
         // reconcileValueWrite's clamp (the dashboard hides the readout for < 0).
@@ -260,6 +268,30 @@ function toNumber(v: any): number | null {
 /** Coerce a possibly-stringy boolean ('false'/0/'') to a real boolean. */
 export function toBoolean(v: any): boolean {
   return v === true || v === 1 || v === "true" || v === "1";
+}
+
+/**
+ * Encode the hub's `noiseLayers` blob array (docs/plans/SATELLITE_SLEEP_SOUNDS.md)
+ * into the wire CSV param the firmware parses — `"pink:45,-rain:35"`, a leading
+ * `-` meaning "present but off, remember this level". R4: the CSV is complete
+ * and authoritative — the firmware turns OFF any roster layer not named in it,
+ * so a caller must encode every layer it knows about, not just the ones that
+ * changed. Returns `undefined` for a non-array/empty input so `legacySetUrl` can
+ * omit the `noiseLayers` param entirely (pre-noise firmware, or a blob that
+ * hasn't reported layers yet) — the same forward-compat shape as `flip`/`eco`.
+ * Entries without a string `id` are ignored; `level` is clamped to 0-100 and a
+ * non-finite level defaults to 0.
+ */
+export function encodeNoiseLayers(layers: unknown): string | undefined {
+  if (!Array.isArray(layers) || layers.length === 0) return undefined;
+  const tokens = layers
+    .filter((l): l is { id: string; on?: boolean; level?: number } => !!l && typeof l === "object" && typeof (l as any).id === "string")
+    .map((l) => {
+      const raw = Number((l as any).level);
+      const level = Number.isFinite(raw) ? Math.min(100, Math.max(0, Math.round(raw))) : 0;
+      return `${toBoolean((l as any).on) ? "" : "-"}${(l as any).id}:${level}`;
+    });
+  return tokens.length ? tokens.join(",") : undefined;
 }
 
 /**

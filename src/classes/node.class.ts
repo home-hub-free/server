@@ -8,6 +8,7 @@ import {
   buildSetRequests,
   channelSchema,
   channelValue,
+  encodeNoiseLayers,
   isObjectBlobCategory,
   reconcileValueWrite,
   toBoolean,
@@ -418,7 +419,18 @@ export class Node {
       // `eco` same shape: only forward it once the device has reported the key
       // (pre-eco firmware ignores the arg anyway; this just keeps blobs honest).
       const eco = value?.eco === undefined ? "" : `&eco=${value.eco ? 1 : 0}`;
-      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}${eco}`;
+      // Sleep sounds (docs/plans/SATELLITE_SLEEP_SOUNDS.md) — same forward-compat
+      // shape as flip/eco: each param rides only once the blob actually carries
+      // the key, so pre-noise firmware never sees an unknown arg and a fresh unit
+      // is never seeded with keys it doesn't own. `noiseLayers` is CSV-encoded by
+      // the one encoder that owns the blob-array <-> wire-CSV conversion (R4).
+      const noise = value?.noise === undefined ? "" : `&noise=${value.noise ? 1 : 0}`;
+      const noiseLevel = value?.noiseLevel === undefined ? "" : `&noiseLevel=${Number(value.noiseLevel)}`;
+      const noiseTimerMin =
+        value?.noiseTimerMin === undefined ? "" : `&noiseTimerMin=${Number(value.noiseTimerMin)}`;
+      const noiseLayersCsv = encodeNoiseLayers(value?.noiseLayers);
+      const noiseLayers = noiseLayersCsv === undefined ? "" : `&noiseLayers=${encodeURIComponent(noiseLayersCsv)}`;
+      return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}${eco}${noise}${noiseLevel}${noiseTimerMin}${noiseLayers}`;
     }
     return `${url}/set?value=${value}`;
   }
