@@ -28,9 +28,15 @@ setInterval(() => {
   }
 }, 60 * 1000);
 
-// Every 30 minutes interval
-setInterval(() => {
-  updateWeatherData().then(() => {
+// Every 30 minutes interval. Exported so the tick is testable.
+//
+// The fetch MUST be absorbed here: Open-Meteo answering 503 (its 2026-09-20..29 outage) made
+// `updateWeatherData()` reject on this timer with nothing catching it, and Node turns an
+// unhandled rejection into a process exit — the hub died every 30 min for ten days (398
+// systemd restarts). Weather is a convenience, never a control-plane dependency: on failure
+// we log, keep the last-good `forecast`, and let the next tick retry.
+export function weatherTick(): Promise<void> {
+  return updateWeatherData().then(() => {
     const houseData = VAssistantDB.get('houseData');
     const insideTempSensor = houseData && houseData.insideSensorTemperature;
     if (insideTempSensor) {
@@ -55,8 +61,22 @@ setInterval(() => {
         });
       }
     }
+  }).catch((err) => {
+    log(EVENT_TYPES.error, [`Weather refresh failed (keeping last-good forecast): ${describeError(err)}`]);
   });
-}, 60 * 1000 * 30);
+}
+setInterval(() => { void weatherTick(); }, 60 * 1000 * 30);
+
+/** One-line, text-only error description (the logger prints strings, not objects). */
+function describeError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as { message?: unknown; code?: unknown; response?: { status?: unknown } };
+    const status = e.response && e.response.status !== undefined ? ` (HTTP ${e.response.status})` : '';
+    const code = e.code !== undefined ? ` [${String(e.code)}]` : '';
+    return `${e.message !== undefined ? String(e.message) : String(err)}${status}${code}`;
+  }
+  return String(err);
+}
 
 export function initDailyEvents() {
   var rule = new schedule.RecurrenceRule();
@@ -65,17 +85,24 @@ export function initDailyEvents() {
   rule.second = 0;
   rule.dayOfWeek = new schedule.Range(0,6);
 
-  updateAstroEvents().then(() => {
-    updateDailyGoogleCalendarEvents();
-  });
+  refreshAstroAndCalendar();
 
   // This runs daily at 12:05am, updates weather data and retrieves calendar data (if any)
   schedule.scheduleJob(rule, () => {
     cleanup();
-    updateAstroEvents().then(() => {
-      updateDailyGoogleCalendarEvents();
-    });
+    refreshAstroAndCalendar();
   });
+}
+
+// Same discipline as `weatherTick`: the calendar read can reject (credentials, network) and
+// this chain runs unsupervised at boot and at 00:05 — never let it become an unhandled rejection.
+function refreshAstroAndCalendar(): Promise<void> {
+  return updateAstroEvents()
+    .then(() => updateDailyGoogleCalendarEvents())
+    .then(() => undefined)
+    .catch((err) => {
+      log(EVENT_TYPES.error, [`Daily calendar refresh failed: ${describeError(err)}`]);
+    });
 }
 
 export function addDailyEvent(name, time, execution) {
