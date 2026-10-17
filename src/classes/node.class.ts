@@ -10,6 +10,9 @@ import {
   channelValue,
   encodeNoiseLayers,
   isObjectBlobCategory,
+  isObjectBlobValue,
+  isPlainObject,
+  encodeBlobParams,
   reconcileValueWrite,
   toBoolean,
   withChannelValue,
@@ -135,6 +138,11 @@ export class Node {
   public ledOnActive: boolean = true;
   public channelAware: boolean = false;
   public channels: ChannelSpec[] = [];
+  /** Declared through `/sensor-declare` — the split endpoints (`/get-sensors` vs
+   * `/get-devices`) classify by this flag for any category the hub has no
+   * hard-coded SENSOR_CATEGORIES entry for (a custom soil-moisture probe, say).
+   * Persisted in the node record so it survives a restart. */
+  public isSensor: boolean = false;
   public value: any;
   public operationalRanges: string[];
   public lastPing: Date = new Date();
@@ -191,7 +199,13 @@ export class Node {
 
   /** Current value of one channel, read through the codec. */
   getChannel(key: string): boolean | number | undefined {
-    return channelValue(this.category, key, this.value);
+    return this.cv(key);
+  }
+
+  /** Read one channel through the codec with THIS node's effective schema — the
+   * self-declared one when channel-aware, else the code-owned category schema. */
+  private cv(key: string): boolean | number | undefined {
+    return channelValue(this.category, key, this.value, this.channelAware ? this.channels : undefined);
   }
 
   /**
@@ -338,6 +352,7 @@ export class Node {
       channelAware: true,
       value,
       previous,
+      channels: this.channels,
     });
     if (requests.length === 0) return Promise.resolve(true);
 
@@ -364,7 +379,7 @@ export class Node {
   }
 
   private revertChannel(channel: string | undefined, value: any, previous: any) {
-    if (channel && isObjectBlobCategory(this.category)) {
+    if (channel && isObjectBlobValue(this.category, this.value)) {
       if (this.value && previous) this.value[channel] = previous[channel];
     } else if (this.value === value) {
       this.value = previous;
@@ -432,13 +447,17 @@ export class Node {
       const noiseLayers = noiseLayersCsv === undefined ? "" : `&noiseLayers=${encodeURIComponent(noiseLayersCsv)}`;
       return `${url}/set?volume=${Number(value?.volume ?? 55)}&mic=${value?.mic ? 1 : 0}${flip}${eco}${noise}${noiseLevel}${noiseTimerMin}${noiseLayers}`;
     }
+    // A per-key blob on a category the hub has no URL builder for (a custom
+    // multi-channel device that didn't self-declare channels): every key rides as
+    // its own param rather than collapsing to "[object Object]".
+    if (isPlainObject(value)) return `${url}/set?${encodeBlobParams(value)}`;
     return `${url}/set?value=${value}`;
   }
 
   private hasChanges(newValue: any): boolean {
     // Object-blob values stringify to "[object Object]" — a naive compare would
     // read every write as a no-op and never notify the device.
-    if (isObjectBlobCategory(this.category)) return true;
+    if (isObjectBlobValue(this.category, newValue)) return true;
     return String(newValue) !== String(this.value);
   }
 
@@ -485,7 +504,7 @@ export class Node {
     const channel = this.booleanSensorChannel();
     if (!channel) return;
     const incoming = value === 1 || value === true;
-    if (channelValue(this.category, channel.key, this.value) !== incoming) {
+    if (this.cv(channel.key) !== incoming) {
       this.report(value, source);
     }
   }
@@ -517,7 +536,7 @@ export class Node {
       // Edge-trigger: only fire on a real false → true transition. Read/write the
       // sensor channel through the codec so a multi-channel node (presence-relay)
       // keeps its co-located actuator sub-value; scalar nodes are unaffected.
-      if (channelValue(this.category, channel, this.value) !== true) {
+      if (this.cv(channel) !== true) {
         this.value = withChannelValue(this.category, this.value, channel, true);
         io.emit("sensor-update", { id: this.id, value: true });
         emitSensorEvent(this.asSensorLike(), source, this.coverage(channel, true));
@@ -544,7 +563,7 @@ export class Node {
     // covered temp would also drop a co-reported humidity swing from the reaction plane —
     // acceptable; the reading is still recorded to memory, with true provenance.)
     const present = sensorChannels
-      .map((c) => ({ key: c.key, value: channelValue(this.category, c.key, this.value) }))
+      .map((c) => ({ key: c.key, value: this.cv(c.key) }))
       .filter((c) => c.value !== undefined) as { key: string; value: boolean | number }[];
     const covered = present.some((c) => Node.isCovered(this, c.key, c.value));
     emitSensorEvent(this.asSensorLike(), source, covered ? { coveredByEffect: true } : {});
@@ -582,6 +601,7 @@ export class Node {
       ...(this.unit ? { unit: this.unit } : {}),
       ...(this.category === "presence" ? { ledOnActive: this.ledOnActive } : {}),
       ...(this.channels?.length ? { channels: this.channels } : {}),
+      ...(this.isSensor ? { isSensor: true } : {}),
       ...(this.stream ? { stream: this.stream } : {}),
       // Camera roster carries the device ip so the box-side vision-service can build
       // the MJPEG pull URL (`http://<ip>:<port><path>`). Contract: vision-service/

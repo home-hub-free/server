@@ -160,6 +160,24 @@ export function isObjectBlobCategory(category: string | undefined): boolean {
   return category === "evap-cooler" || category === "presence-relay" || category === "voice-satellite";
 }
 
+/** A plain `{...}` value blob (not null, not an array). */
+export function isPlainObject(v: any): v is Record<string, any> {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+/**
+ * Object-blob detection for the GENERIC fleet: a category the codec knows as a
+ * blob, OR any node whose live value is a per-channel object — a custom-built
+ * device that self-declares several channels (`/device-declare` `channels[]`)
+ * without the hub having a hard-coded category for it. Every codec path keys into
+ * the blob by channel when this is true, so a new multi-channel device rides the
+ * same merge/revert/one-request-per-channel semantics as the cooler, with zero
+ * hub code per category.
+ */
+export function isObjectBlobValue(category: string | undefined, value: any): boolean {
+  return isObjectBlobCategory(category) || isPlainObject(value);
+}
+
 /**
  * Reconcile a (possibly partial) value write against the node's current value.
  *
@@ -179,7 +197,10 @@ export function isObjectBlobCategory(category: string | undefined): boolean {
  * whole-value write there genuinely IS the whole value, so replace is correct.
  */
 export function reconcileValueWrite(category: string | undefined, previous: any, incoming: any): any {
-  if (!isObjectBlobCategory(category)) return incoming;
+  // Generic blobs (a self-described multi-channel device) merge like the cooler;
+  // a scalar write to a scalar node replaces, as before. A scalar aimed at an
+  // object node is passed through untouched (the caller's contract, not ours).
+  if (!isObjectBlobCategory(category) && !(isPlainObject(previous) && isPlainObject(incoming))) return incoming;
 
   const base: any = previous && typeof previous === "object" ? { ...previous } : {};
   if (incoming && typeof incoming === "object") {
@@ -208,7 +229,7 @@ export function reconcileValueWrite(category: string | undefined, previous: any,
  * value directly. */
 function readChannelValue(category: string | undefined, spec: ChannelSpec, deviceValue: any): boolean | number {
   let raw: any;
-  if (isObjectBlobCategory(category)) {
+  if (isObjectBlobValue(category, deviceValue)) {
     raw = (deviceValue ?? {})[spec.key];
   } else if (category === "temp/humidity") {
     const [temperature, humidity] = String(deviceValue ?? "").split(":");
@@ -229,10 +250,26 @@ export function channelValue(
   category: string | undefined,
   key: string,
   deviceValue: any,
+  declared?: ChannelSpec[],
 ): boolean | number | undefined {
-  const spec = (channelSchema(category) ?? []).find((s) => s.key === key);
+  // A self-described node's declared schema wins over the (absent) code-owned one.
+  const spec =
+    (declared?.length ? declared : channelSchema(category) ?? []).find((s) => s.key === key) ??
+    inferredSpec(key, deviceValue);
   if (!spec) return undefined;
   return readChannelValue(category, spec, deviceValue);
+}
+
+/** Last-resort spec for a node with NO schema at all (unknown category, nothing
+ * declared): a blob key reads by its own type; `value` is the scalar itself. */
+function inferredSpec(key: string, deviceValue: any): ChannelSpec | undefined {
+  if (isPlainObject(deviceValue)) {
+    if (!(key in deviceValue)) return undefined;
+    const v = deviceValue[key];
+    return { key, role: "sensor", kind: typeof v === "boolean" ? "boolean" : "number", writable: false };
+  }
+  if (key !== "value") return undefined;
+  return { key, role: "actuator", kind: typeof deviceValue === "boolean" ? "boolean" : "number", writable: true };
 }
 
 /**
@@ -247,7 +284,7 @@ export function withChannelValue(
   key: string,
   newValue: boolean | number,
 ): any {
-  if (isObjectBlobCategory(category)) {
+  if (isObjectBlobValue(category, deviceValue)) {
     return { ...(deviceValue ?? {}), [key]: newValue };
   }
   if (category === "temp/humidity") {
@@ -331,6 +368,15 @@ function encodeSetValue(v: any): string | number {
   return v;
 }
 
+/** `{fan:true, level:40}` → `fan=1&level=40` (scalar keys only; nested blobs and
+ * arrays are the device's own business and never ride the generic wire). */
+export function encodeBlobParams(value: Record<string, any>): string {
+  return Object.entries(value)
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== "object")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(encodeSetValue(v)))}`)
+    .join("&");
+}
+
 /**
  * Build the outbound `/set` request(s) for a device write — the Stage-3
  * compatibility shim's core, isolated here as a pure function so it can be tested
@@ -350,6 +396,9 @@ export function buildSetRequests(opts: {
   channelAware: boolean;
   value: any;
   previous?: any;
+  /** The node's self-declared schema (channel-aware devices) — wins over the
+   * code-owned one so a custom device's channels route without a hub release. */
+  channels?: ChannelSpec[];
 }): SetRequest[] {
   const base = `http://${opts.ip}`;
 
@@ -357,12 +406,21 @@ export function buildSetRequests(opts: {
     if (opts.category === "evap-cooler") {
       return [{ url: `${base}/set?fan=${opts.value.fan}&water=${opts.value.water}` }];
     }
+    // A legacy node whose value is a per-key blob (no hub category for it): one
+    // request carrying every key as its own param — never "[object Object]".
+    if (isPlainObject(opts.value) && !isObjectBlobCategory(opts.category)) {
+      return [{ url: `${base}/set?${encodeBlobParams(opts.value)}` }];
+    }
     return [{ url: `${base}/set?value=${opts.value}` }];
   }
 
-  const specs = (channelSchema(opts.category) ?? []).filter((s) => s.writable);
+  const schema =
+    opts.channels?.length
+      ? opts.channels
+      : channelSchema(opts.category) ?? [{ key: "value", role: "actuator", kind: "number", writable: true } as ChannelSpec];
+  const specs = schema.filter((s) => s.writable);
 
-  if (isObjectBlobCategory(opts.category)) {
+  if (isObjectBlobValue(opts.category, opts.value)) {
     const next = opts.value ?? {};
     const prev = opts.previous ?? {};
     return specs

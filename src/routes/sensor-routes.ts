@@ -10,6 +10,7 @@ import {
   buildClientSensorData,
   mergeNodeData,
   persistNode,
+  applyDeclaredChannels,
 } from "../handlers/node.handler";
 import { requireAuth } from "../auth/middleware";
 
@@ -62,7 +63,7 @@ export function initSensorRoutes(app: Express) {
 
   // A sensor connected / is pinging (every ~10s).
   app.post("/sensor-declare", (request, response) => {
-    const { id, name, value } = request.body;
+    const { id, name, value, channels, unit } = request.body;
     let node = findNode(id);
 
     if (!node) {
@@ -72,11 +73,23 @@ export function initSensorRoutes(app: Express) {
       // what makes the dashboard's presence-sensor "Calibrate" button render,
       // so normalize it before emitting the declare payload.
       node = createNode(id, name, request.ip);
+      // Declared on the sensor route → classified as a sensor whatever its
+      // category, so a custom probe lands in /get-sensors (not as a dead device).
+      node.isSensor = true;
+      applyDeclaredChannels(node, channels);
+      if (typeof unit === "string" && unit && !node.unit) node.unit = unit;
       nodes.push(node);
       assignNodeIp(id, request.ip);
+      persistNode(node);
       io.emit("sensor-declare", buildClientSensorData(node));
     } else {
       node.lastPing = new Date();
+      if (!node.isSensor) {
+        node.isSensor = true;
+        persistNode(node);
+      }
+      applyDeclaredChannels(node, channels);
+      if (typeof unit === "string" && unit && !node.unit) node.unit = unit;
       assignNodeIp(id, request.ip);
     }
     // Heartbeat reconvergence: when the declare carries the device's current

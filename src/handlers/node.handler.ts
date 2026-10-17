@@ -54,7 +54,9 @@ const SENSOR_CATEGORIES = new Set<NodeCategory>(["motion", "presence", "temp/hum
 /** A node is a "sensor" if it's a pure sensor category; everything else (incl. the
  * cooler, which also reports temps) is a "device" for the legacy split endpoints. */
 export function isSensorNode(node: Node): boolean {
-  return SENSOR_CATEGORIES.has(node.category);
+  // Hard-coded sensor categories, OR anything that introduced itself through
+  // `/sensor-declare` (a custom-built sensor the hub has no category for).
+  return SENSOR_CATEGORIES.has(node.category) || node.isSensor === true;
 }
 
 export const deviceNodes = () => nodes.filter((n) => !isSensorNode(n));
@@ -93,6 +95,10 @@ export function buildClientSensorData(node: Node) {
     sensorType: node.category,
     ip: node.ip,
     ...(node.zone ? { zone: node.zone } : {}),
+    ...(node.unit ? { unit: node.unit } : {}),
+    // A self-described sensor ships its declared channels so the dashboard can
+    // render a reading it has no hard-coded chip for (kind/unit per channel).
+    ...(node.channelAware && node.channels?.length ? { channels: node.channels } : {}),
     ...(node.category === "presence" ? { ledOnActive: node.ledOnActive } : {}),
   };
 }

@@ -332,3 +332,57 @@ describe("channel projection (Stage 1 data-contract redesign)", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Generic fleet (2026-10-17 dashboard scale fix): a custom-built device the hub
+// has NO category for must ride the same codec as the cooler, keyed by its own
+// self-declared channels or, failing that, by the shape of its value.
+// ---------------------------------------------------------------------------
+import { channelValue as cv2, withChannelValue as wcv2, reconcileValueWrite as rvw2, buildSetRequests as bsr2, encodeBlobParams } from "./channels";
+
+describe("generic (unknown-category) devices", () => {
+  const declared = [
+    { key: "pump", role: "actuator", kind: "boolean", writable: true },
+    { key: "level", role: "sensor", kind: "number", unit: "%", writable: false },
+  ] as any[];
+
+  it("reads a declared channel out of an unknown node's blob", () => {
+    expect(cv2("water-pump", "pump", { pump: true, level: 72 }, declared)).toBe(true);
+    expect(cv2("water-pump", "level", { pump: true, level: 72 }, declared)).toBe(72);
+  });
+
+  it("reads a blob key by shape when nothing was declared, and `value` for a scalar", () => {
+    expect(cv2("water-pump", "level", { pump: true, level: "72" })).toBe(72);
+    expect(cv2("irrigation-valve", "value", true)).toBe(true);
+    expect(cv2("irrigation-valve", "nope", true)).toBeUndefined();
+  });
+
+  it("merges a channel write into an unknown node's blob without clobbering siblings", () => {
+    expect(wcv2("water-pump", { pump: false, level: 72 }, "pump", true)).toEqual({ pump: true, level: 72 });
+    expect(rvw2("water-pump", { pump: false, level: 72 }, { pump: true })).toEqual({ pump: true, level: 72 });
+  });
+
+  it("a scalar unknown node still replaces its value", () => {
+    expect(wcv2("irrigation-valve", false, "value", true)).toBe(true);
+    expect(rvw2("irrigation-valve", false, true)).toBe(true);
+  });
+
+  it("channel-aware: one request per changed DECLARED writable channel", () => {
+    const reqs = bsr2({
+      ip: "10.0.0.9", category: "water-pump", channelAware: true, channels: declared,
+      value: { pump: true, level: 72 }, previous: { pump: false, level: 72 },
+    });
+    expect(reqs).toEqual([{ url: "http://10.0.0.9/set?ch=pump&value=1", channel: "pump" }]);
+  });
+
+  it("legacy blob on an unknown category: every scalar key becomes a param", () => {
+    expect(encodeBlobParams({ on: true, level: 40, nested: { a: 1 }, nil: null })).toBe("on=1&level=40");
+    const reqs = bsr2({ ip: "10.0.0.9", category: "water-pump", channelAware: false, value: { on: true, level: 40 } });
+    expect(reqs).toEqual([{ url: "http://10.0.0.9/set?on=1&level=40" }]);
+  });
+
+  it("known scalar categories are untouched by the generic paths", () => {
+    expect(bsr2({ ip: "10.0.0.9", category: "light", channelAware: false, value: true })).toEqual([{ url: "http://10.0.0.9/set?value=true" }]);
+    expect(rvw2("light", false, true)).toBe(true);
+  });
+});
