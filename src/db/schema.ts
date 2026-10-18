@@ -92,6 +92,7 @@ export function applySchema(db: DatabaseType.Database): void {
     -- that is always running. The scheduler tick (src/timers/scheduler.ts) announces a
     -- due timer/reminder through the same speaker sink the agent's say tool uses.
     --   kind 'timer'/'reminder' → one-shot at fire_at, status pending → fired|cancelled
+    --   kind 'event'            → a calendar entry (LOCAL_AGENDA); announced remind_min before fire_at
     --   kind 'stopwatch'        → open-ended, status running → stopped (elapsed from started_at)
     CREATE TABLE IF NOT EXISTS timers (
       id          TEXT PRIMARY KEY,
@@ -100,7 +101,20 @@ export function applySchema(db: DatabaseType.Database): void {
       message     TEXT,                     -- spoken line announced when a timer/reminder fires
       zone        TEXT,                     -- optional zone (routing / context)
       for_person  TEXT,                     -- person-targeted reminder: their id or name; zone is late-bound
-      fire_at     TEXT,                     -- ISO8601 fire time (timer/reminder); NULL for stopwatch
+      fire_at     TEXT,                     -- ISO8601 fire time (timer/reminder) / START of the current occurrence (event); NULL for stopwatch
+      -- LOCAL_AGENDA: the agenda columns. An 'event' is a calendar entry (title, start=fire_at, end_at,
+      -- all_day) that the scheduler ANNOUNCES remind_min minutes before its start (NULL = silent);
+      -- a 'reminder' keeps using message/fire_at. recurrence ('daily'|'weekdays'|'weekly[:d,d]'|
+      -- 'monthly'|'yearly') makes the row re-arm itself after firing (fire_at advances to the next
+      -- occurrence). notify_at is the derived moment the scheduler watches (fire_at - remind_min).
+      title       TEXT,
+      end_at      TEXT,
+      all_day     INTEGER NOT NULL DEFAULT 0,
+      recurrence  TEXT,
+      remind_min  INTEGER,
+      notify_at   TEXT,
+      notes       TEXT,
+      created_by  TEXT,
       started_at  TEXT NOT NULL DEFAULT (datetime('now')),  -- creation / stopwatch start
       stopped_at  TEXT,                     -- stopwatch stop time
       status      TEXT NOT NULL DEFAULT 'pending', -- pending | fired | cancelled | running | stopped
@@ -126,20 +140,6 @@ export function applySchema(db: DatabaseType.Database): void {
       created_at  TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE INDEX IF NOT EXISTS idx_nodes_zone    ON nodes(zone);
-    CREATE INDEX IF NOT EXISTS idx_nodes_category ON nodes(category);
-    CREATE INDEX IF NOT EXISTS idx_devices_zone  ON devices(zone);
-    CREATE INDEX IF NOT EXISTS idx_sensors_zone  ON sensors(zone);
-    CREATE INDEX IF NOT EXISTS idx_effect_arms_eff  ON effect_arms(effect_id);
-    CREATE INDEX IF NOT EXISTS idx_effect_conds_arm ON effect_conditions(arm_id);
-    CREATE INDEX IF NOT EXISTS idx_timers_status ON timers(status);
-    CREATE INDEX IF NOT EXISTS idx_timers_fire   ON timers(fire_at);
-    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-  `);
-
-  // The `effects` trigger index targets a dynamic-shape column (`trigger_node`).
-  // applySchema runs eagerly at connection-open, *before* migrate.ts has a chance
-  // to rebuild a legacy `effects` table (the `CREATE TABLE IF NOT EXISTS` above is
     -- Guests: people who are NOT household members but whom the house may need to
     -- address (a parent visiting, a neighbour, a friend of a member). One row per
     -- person; aliases is a JSON array of other names they go by. treatment is
@@ -164,6 +164,21 @@ export function applySchema(db: DatabaseType.Database): void {
       PRIMARY KEY (guest_id, member_id)
     );
 
+    CREATE INDEX IF NOT EXISTS idx_nodes_zone    ON nodes(zone);
+    CREATE INDEX IF NOT EXISTS idx_nodes_category ON nodes(category);
+    CREATE INDEX IF NOT EXISTS idx_devices_zone  ON devices(zone);
+    CREATE INDEX IF NOT EXISTS idx_sensors_zone  ON sensors(zone);
+    CREATE INDEX IF NOT EXISTS idx_effect_arms_eff  ON effect_arms(effect_id);
+    CREATE INDEX IF NOT EXISTS idx_effect_conds_arm ON effect_conditions(arm_id);
+    CREATE INDEX IF NOT EXISTS idx_timers_status ON timers(status);
+    CREATE INDEX IF NOT EXISTS idx_timers_fire   ON timers(fire_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_guest_relations_member ON guest_relations(member_id);
+  `);
+
+  // The `effects` trigger index targets a dynamic-shape column (`trigger_node`).
+  // applySchema runs eagerly at connection-open, *before* migrate.ts has a chance
+  // to rebuild a legacy `effects` table (the `CREATE TABLE IF NOT EXISTS` above is
   // a no-op when an older table already exists). Creating this index against a
   // legacy table would throw `no such column: trigger_node` and crash the process
   // at import, so guard it: only create it once the table actually has the column.
@@ -173,7 +188,6 @@ export function applySchema(db: DatabaseType.Database): void {
   if (effectsCols.some((c) => c.name === "trigger_node")) {
     db.exec("CREATE INDEX IF NOT EXISTS idx_effects_trigger ON effects(trigger_node);");
   }
-    CREATE INDEX IF NOT EXISTS idx_guest_relations_member ON guest_relations(member_id);
 
   // Additive column for person-targeted reminders (PERCEPTION_TO_AGENT_PLAN §3.5). The CREATE above
   // already carries it on a fresh DB; ALTER it onto an existing timers table (idempotent — guard on the
@@ -182,4 +196,15 @@ export function applySchema(db: DatabaseType.Database): void {
   if (!timerCols.some((c) => c.name === "for_person")) {
     db.exec("ALTER TABLE timers ADD COLUMN for_person TEXT;");
   }
+  // LOCAL_AGENDA (2026-10-18): the calendar columns, additive + idempotent like for_person above.
+  const agendaCols: Array<[string, string]> = [
+    ["title", "TEXT"], ["end_at", "TEXT"], ["all_day", "INTEGER NOT NULL DEFAULT 0"], ["recurrence", "TEXT"],
+    ["remind_min", "INTEGER"], ["notify_at", "TEXT"], ["notes", "TEXT"], ["created_by", "TEXT"],
+  ];
+  for (const [name, type] of agendaCols) {
+    if (!timerCols.some((c) => c.name === name)) db.exec(`ALTER TABLE timers ADD COLUMN ${name} ${type};`);
+  }
+  // Legacy pending timers/reminders predate notify_at — the scheduler now watches notify_at, so seed it.
+  db.exec("UPDATE timers SET notify_at = fire_at WHERE notify_at IS NULL AND fire_at IS NOT NULL AND kind IN ('timer','reminder');");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_timers_notify ON timers(status, notify_at);");
 }

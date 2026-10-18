@@ -32,6 +32,7 @@ import { initTimeEffects, rearmTimeEffects } from "./automation/time-scheduler-d
 import { initFirmwareRoutes, ensureFirmwareStore } from "./routes/firmware-routes";
 import { initDeviceLogRoutes } from "./routes/device-log-routes";
 import { initTimerRoutes } from "./routes/timer-routes";
+import { initAgendaRoutes } from "./routes/agenda-routes";
 import { initAssistantChatRoutes } from "./routes/assistant-chat-routes";
 import { initCameraRoutes } from "./routes/camera-routes";
 import { initTimers } from "./timers/scheduler";
@@ -82,9 +83,9 @@ initWebSockets(server);
 initIngestion();
 
 initAuthRoutes(app);
-initSensorRoutes(app);
 // Guest registry (people who are not members + their relationship to each member).
 initGuestsRoutes(app);
+initSensorRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);
 // Wire the Node automation hook now that the registry + effects store exist.
@@ -107,6 +108,9 @@ ensureFirmwareStore();
 initFirmwareRoutes(app);
 initDeviceLogRoutes(app);
 initTimerRoutes(app);
+// LOCAL_AGENDA: the household calendar (events + reminders, one table) — dashboard CRUD on /agenda,
+// the calendar-service-compatible read on /events for reflex + the morning brief.
+initAgendaRoutes(app);
 // Always-on driver for user timers/reminders — fires due ones through the house speaker.
 initTimers();
 // Presence-anchored morning brief (docs/BRIEFING_ROUTINE.md) — default-on, self-gating on the
