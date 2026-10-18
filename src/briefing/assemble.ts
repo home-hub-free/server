@@ -4,16 +4,15 @@
  * Spanish template. No LLM on this path on purpose — the brief has to be reliable enough to
  * be a trustworthy default (PHILOSOPHY.md §2).
  *
- * Pure over injected fetchers so tests need neither calendar-service nor Open-Meteo. The
- * default fetchers call calendar-service over HTTP (same CALENDAR_URL convention as the
- * gateway) and read the hub's own in-process forecast cache (no loopback HTTP for /weather).
+ * Pure over injected fetchers so tests need neither a calendar backend nor Open-Meteo. The
+ * default fetchers read the hub's OWN agenda table in-process (LOCAL_AGENDA — the household
+ * calendar lives on the box; the Google calendar-service path is retired) and the in-process
+ * forecast cache (no loopback HTTP for /weather).
  *
- * Calendar routing gotcha this module owns: the calendar router degrades an `owner=<person>`
- * read to the FAMILY calendar when that person has no linked calendar. A brief must never do
- * that (it would read the family calendar to every unlinked member as if it were theirs), so
- * we check GET /sources first and only proceed when a `kind:"personal"` source exists.
- * Owner is routed by user.id — the roster's name map can't resolve display names today
- * (hub sends `displayName`, roster expects `name`), but ids resolve via IsEnrolled.
+ * The `calendarSources` personal-source gate survives from the Google era (a member with no
+ * linked calendar must never be briefed from the family one); with the local agenda every
+ * member has the one local calendar, so the default fetcher always reports a personal source
+ * and person-targeting happens per row (house-wide rows + rows for this member).
  */
 import { log, EVENT_TYPES } from "../logger";
 
@@ -129,42 +128,31 @@ export function buildBriefText(
 
 // ── default (production) fetchers ────────────────────────────────────────────────────────────
 
-// Box-local like the gateway's calendar module (llm-gateway tools.ts uses the same default).
-const CALENDAR_URL = process.env.CALENDAR_URL ?? "http://127.0.0.1:8150";
-
-/** The identity envelope the driver presents: the hub is a trusted internal caller briefing a
- *  roster member it already confidence-gated (household + vision confidence ≥ min), so it
- *  asserts the target's id at full confidence — same trust posture as the gateway forwarding
- *  a login session. */
-function envelope(ownerId: string): URLSearchParams {
-  return new URLSearchParams({
-    owner: ownerId,
-    user_id: ownerId,
-    via: "system",
-    confidence: "1",
-  });
-}
-
-async function getJSON(url: string): Promise<any> {
-  // Node 18+ global fetch (server tsconfig lib doesn't declare it — same reach-through as
-  // v-assistant's routeZonedAnnounce).
-  const f = (globalThis as any).fetch as undefined | ((u: string) => Promise<any>);
-  if (!f) throw new Error("fetch unavailable");
-  const res = await f(url);
-  if (!res.ok) throw new Error(`calendar-service ${res.status}`);
-  return res.json();
-}
-
+/**
+ * LOCAL_AGENDA (2026-10-18): the calendar is the hub's own agenda table now — no HTTP, no
+ * calendar-service, nothing leaves the box. Every member has the one local calendar (so the
+ * personal-source gate always passes); the day's events are the house-wide rows plus the ones
+ * targeted at this person (by id or display name).
+ */
 export const defaultFetchers: BriefFetchers = {
-  async calendarSources(ownerId) {
-    const body = await getJSON(`${CALENDAR_URL}/sources?${envelope(ownerId)}`);
-    return Array.isArray(body?.sources) ? body.sources : [];
+  async calendarSources() {
+    return [{ kind: "personal" }];
   },
   async calendarEvents(ownerId, dateISO) {
-    const q = envelope(ownerId);
-    q.set("from", dateISO); // `from` alone pins the single calendar day (calendar-service windowFromQuery)
-    const body = await getJSON(`${CALENDAR_URL}/events?${q}`);
-    return Array.isArray(body?.events) ? body.events : [];
+    // Lazy require: agenda-routes pulls the users repo + auth middleware; keep module load light for tests.
+    const { readAgenda } = require("../routes/agenda-routes");
+    const { parseLocalDate } = require("../timers/agenda");
+    const from: Date | null = parseLocalDate(dateISO);
+    if (!from) return [];
+    const to = new Date(from);
+    to.setHours(23, 59, 59, 999);
+    return readAgenda(from, to, ownerId).map((o: any) => ({
+      title: o.title,
+      start: o.start,
+      ...(o.end ? { end: o.end } : {}),
+      ...(o.all_day ? { all_day: true } : {}),
+      calendar: o.calendar,
+    }));
   },
   async weather() {
     // In-process — the hub owns the forecast cache; no reason to loop back through GET /weather.

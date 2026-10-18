@@ -9,7 +9,8 @@ const repo = new TimersRepo();
 const room = (zone: string, people: RoomDigest["people"]): RoomDigest =>
   ({ zone, occupied: true, count: people!.length, people, source: ["vision"], observedAt: "x" });
 const rowOf = (o: Partial<TimerRow>): TimerRow =>
-  ({ id: "t", kind: "reminder", label: null, message: "m", zone: null, for_person: null, fire_at: null, started_at: "x", stopped_at: null, status: "pending", created_at: "x", ...o });
+  ({ id: "t", kind: "reminder", label: null, message: "m", zone: null, for_person: null, fire_at: null, started_at: "x", stopped_at: null, status: "pending", created_at: "x",
+     title: null, end_at: null, all_day: 0, recurrence: null, remind_min: 0, notify_at: null, notes: null, created_by: null, ...o });
 
 describe("fireDue", () => {
   it("announces each due timer's message exactly once, then marks it fired", () => {

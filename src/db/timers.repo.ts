@@ -1,19 +1,26 @@
 import { randomUUID } from "crypto";
 import { db } from "./connection";
+import { parseRecurrence } from "../timers/recurrence";
 
 /**
- * Store for user-facing timers, reminders and time-tracking ("stopwatch") entries.
+ * Store for user-facing timers, reminders, calendar events and time-tracking ("stopwatch") entries —
+ * the household's ONE agenda table (LOCAL_AGENDA: reminders and calendar entries fall under the same
+ * umbrella, owned by the hub).
  *
- * Two shapes share one table, discriminated by `kind`:
- *   - 'timer' / 'reminder' — a one-shot that the scheduler ANNOUNCES at `fire_at`
+ * Shapes share one table, discriminated by `kind`:
+ *   - 'timer' / 'reminder' — a one-shot (or recurring) that the scheduler ANNOUNCES at `fire_at`
  *     (status: pending → fired, or → cancelled if dropped first).
- *   - 'stopwatch' — an open-ended tracked activity; elapsed is `now - started_at`
+ *   - 'event'              — a calendar entry: `title`, start = `fire_at`, `end_at`, `all_day`. The
+ *     scheduler announces it `remind_min` minutes before the start (`notify_at`); NULL = silent.
+ *   - 'stopwatch'          — an open-ended tracked activity; elapsed is `now - started_at`
  *     (status: running → stopped).
+ * `recurrence` (see timers/recurrence.ts) makes a timer/reminder/event re-arm after firing: the
+ * scheduler advances `fire_at`/`end_at`/`notify_at` to the next occurrence instead of marking fired.
  *
- * The repo keeps no clock of its own: `due()` is parameterised by `nowIso` and the
- * scheduler owns the tick. That keeps the firing logic unit-testable with a fake clock.
+ * The repo keeps no clock of its own: `due()` is parameterised by `nowIso` and the scheduler owns
+ * the tick. That keeps the firing logic unit-testable with a fake clock.
  */
-export type TimerKind = "timer" | "reminder" | "stopwatch";
+export type TimerKind = "timer" | "reminder" | "event" | "stopwatch";
 export type TimerStatus = "pending" | "fired" | "cancelled" | "running" | "stopped";
 
 export interface TimerRow {
@@ -22,14 +29,25 @@ export interface TimerRow {
   label: string | null;
   message: string | null;
   zone: string | null;
-  /** Person-targeted reminder: their id or display name. The delivery zone is late-bound (resolved to
-   *  wherever they are at fire time); null for a general/house-wide timer. See PERCEPTION_TO_AGENT_PLAN §3.5. */
+  /** Person-targeted reminder/event: their id or display name. The delivery zone is late-bound (resolved
+   *  to wherever they are at fire time); null for a general/house-wide item. See PERCEPTION_TO_AGENT_PLAN §3.5. */
   for_person: string | null;
+  /** ISO fire time (timer/reminder) or the START of the current occurrence (event). */
   fire_at: string | null;
   started_at: string;
   stopped_at: string | null;
   status: TimerStatus;
   created_at: string;
+  // ── agenda columns (LOCAL_AGENDA) ──
+  title: string | null;
+  end_at: string | null;
+  all_day: number; // SQLite boolean (0/1)
+  recurrence: string | null;
+  remind_min: number | null;
+  /** Derived: when the scheduler announces this row (fire_at − remind_min for events; fire_at otherwise). */
+  notify_at: string | null;
+  notes: string | null;
+  created_by: string | null;
 }
 
 export interface CreateTimerInput {
@@ -37,24 +55,50 @@ export interface CreateTimerInput {
   label?: string | null;
   message?: string | null;
   zone?: string | null;
-  /** Person-targeted reminder: their id or display name (late-bound zone). Omit for house-wide. */
+  /** Person-targeted: their id or display name (late-bound zone). Omit for house-wide. */
   forPerson?: string | null;
-  /** ISO8601 fire time; required for timer/reminder, ignored for stopwatch. */
+  /** ISO8601 fire time (timer/reminder) / start (event); required except for stopwatch. */
   fireAt?: string | null;
+  title?: string | null;
+  endAt?: string | null;
+  allDay?: boolean;
+  recurrence?: string | null;
+  /** Minutes before `fireAt` to announce an event (null = silent). Ignored for timer/reminder (= 0). */
+  remindMin?: number | null;
+  notes?: string | null;
+  createdBy?: string | null;
+}
+
+/** The editable subset for PATCH (agenda-routes). `null` clears a nullable field. */
+export interface UpdateTimerInput {
+  label?: string | null;
+  message?: string | null;
+  zone?: string | null;
+  forPerson?: string | null;
+  fireAt?: string | null;
+  title?: string | null;
+  endAt?: string | null;
+  allDay?: boolean;
+  recurrence?: string | null;
+  remindMin?: number | null;
+  notes?: string | null;
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO timers (id, kind, label, message, zone, for_person, fire_at, status)
-   VALUES (@id, @kind, @label, @message, @zone, @for_person, @fire_at, @status)`,
+  `INSERT INTO timers (id, kind, label, message, zone, for_person, fire_at, status,
+                       title, end_at, all_day, recurrence, remind_min, notify_at, notes, created_by)
+   VALUES (@id, @kind, @label, @message, @zone, @for_person, @fire_at, @status,
+           @title, @end_at, @all_day, @recurrence, @remind_min, @notify_at, @notes, @created_by)`,
 );
 const getStmt = db.prepare("SELECT * FROM timers WHERE id = ?");
 const dueStmt = db.prepare(
   `SELECT * FROM timers
-     WHERE status = 'pending' AND fire_at IS NOT NULL AND fire_at <= ?
-     ORDER BY fire_at`,
+     WHERE status = 'pending' AND notify_at IS NOT NULL AND notify_at <= ?
+     ORDER BY notify_at`,
 );
+// The spoken "what timers do I have" list — events are agenda entries, not timers, so they stay out.
 const activeTimersStmt = db.prepare(
-  "SELECT * FROM timers WHERE status = 'pending' ORDER BY fire_at",
+  "SELECT * FROM timers WHERE status = 'pending' AND kind IN ('timer','reminder') ORDER BY fire_at",
 );
 const runningStmt = db.prepare(
   "SELECT * FROM timers WHERE status = 'running' ORDER BY started_at",
@@ -62,9 +106,18 @@ const runningStmt = db.prepare(
 const runningByLabelStmt = db.prepare(
   "SELECT * FROM timers WHERE status = 'running' AND label = ? ORDER BY started_at DESC LIMIT 1",
 );
+// Every agenda row (events + reminders, any status but cancelled). Window filtering happens in
+// recurrence expansion (timers/agenda.ts) — a recurring anchor from last year still produces this
+// month's occurrences, so a SQL range on fire_at would be wrong.
+const agendaRowsStmt = db.prepare(
+  "SELECT * FROM timers WHERE kind IN ('event','reminder') AND status != 'cancelled' ORDER BY fire_at",
+);
 const setStatusStmt = db.prepare("UPDATE timers SET status = ? WHERE id = ?");
 const stopStmt = db.prepare(
   "UPDATE timers SET status = 'stopped', stopped_at = ? WHERE id = ?",
+);
+const advanceStmt = db.prepare(
+  "UPDATE timers SET fire_at = @fire_at, end_at = @end_at, notify_at = @notify_at, status = 'pending' WHERE id = @id",
 );
 
 /** Short, human-quotable id (the agent reads it from list_timers, then cancels by it). */
@@ -72,11 +125,48 @@ function newId(): string {
   return randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
+/** Local midnight of an instant (the box TZ — America/Mexico_City, no DST). */
+function localMidnight(ms: number): Date {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * When the scheduler should speak this row:
+ *  - timer / reminder → at fire_at (remind_min is meaningless: the reminder IS the announcement);
+ *  - timed event      → fire_at − remind_min; null remind_min = a silent calendar entry;
+ *  - all-day event    → 08:00 local on the day (remind_min < 1 day) or 08:00 the day before (≥ 1 day),
+ *                       since "15 minutes before midnight" is never what anyone means.
+ */
+export function computeNotifyAt(
+  kind: TimerKind,
+  fireAt: string | null,
+  remindMin: number | null | undefined,
+  allDay: boolean,
+): string | null {
+  if (!fireAt || kind === "stopwatch") return null;
+  const fire = Date.parse(fireAt);
+  if (Number.isNaN(fire)) return null;
+  if (kind !== "event") return new Date(fire).toISOString();
+  if (remindMin == null) return null;
+  if (allDay) {
+    const eight = localMidnight(fire);
+    eight.setHours(8, 0, 0, 0);
+    if (remindMin >= 1440) eight.setDate(eight.getDate() - 1);
+    return eight.toISOString();
+  }
+  return new Date(fire - Math.max(0, remindMin) * 60_000).toISOString();
+}
+
 export class TimersRepo {
-  /** Create a timer/reminder (with fireAt) or a running stopwatch (kind 'stopwatch'). */
+  /** Create a timer/reminder/event (with fireAt) or a running stopwatch (kind 'stopwatch'). */
   create(input: CreateTimerInput): TimerRow {
     const id = newId();
     const status: TimerStatus = input.kind === "stopwatch" ? "running" : "pending";
+    const fireAt = input.kind === "stopwatch" ? null : input.fireAt ?? null;
+    const allDay = input.kind === "event" && !!input.allDay;
+    const remindMin = input.kind === "event" ? input.remindMin ?? null : 0;
     insertStmt.run({
       id,
       kind: input.kind,
@@ -84,8 +174,16 @@ export class TimersRepo {
       message: input.message ?? null,
       zone: input.zone ?? null,
       for_person: input.forPerson ?? null,
-      fire_at: input.kind === "stopwatch" ? null : input.fireAt ?? null,
+      fire_at: fireAt,
       status,
+      title: input.title ?? null,
+      end_at: input.kind === "event" ? input.endAt ?? null : null,
+      all_day: allDay ? 1 : 0,
+      recurrence: parseRecurrence(input.recurrence) ? input.recurrence!.trim().toLowerCase() : null,
+      remind_min: remindMin,
+      notify_at: computeNotifyAt(input.kind, fireAt, remindMin, allDay),
+      notes: input.notes ?? null,
+      created_by: input.createdBy ?? null,
     });
     return this.get(id)!;
   }
@@ -94,24 +192,82 @@ export class TimersRepo {
     return getStmt.get(id) as TimerRow | undefined;
   }
 
-  /** Pending timers/reminders whose fire_at has arrived at `nowIso`. */
+  /** Patch an agenda row's editable fields (recomputing notify_at). A one-shot that already fired is
+   *  re-armed when its new announce time is in the future (`nowIso`). Returns undefined when missing. */
+  update(id: string, patch: UpdateTimerInput, nowIso: string): TimerRow | undefined {
+    const row = this.get(id);
+    if (!row || row.kind === "stopwatch") return undefined;
+    const next = {
+      label: patch.label !== undefined ? patch.label : row.label,
+      message: patch.message !== undefined ? patch.message : row.message,
+      zone: patch.zone !== undefined ? patch.zone : row.zone,
+      for_person: patch.forPerson !== undefined ? patch.forPerson : row.for_person,
+      fire_at: patch.fireAt !== undefined ? patch.fireAt : row.fire_at,
+      title: patch.title !== undefined ? patch.title : row.title,
+      end_at: patch.endAt !== undefined ? patch.endAt : row.end_at,
+      all_day: patch.allDay !== undefined ? (patch.allDay ? 1 : 0) : row.all_day,
+      recurrence:
+        patch.recurrence !== undefined
+          ? parseRecurrence(patch.recurrence) ? patch.recurrence!.trim().toLowerCase() : null
+          : row.recurrence,
+      remind_min: row.kind === "event" ? (patch.remindMin !== undefined ? patch.remindMin : row.remind_min) : 0,
+      notes: patch.notes !== undefined ? patch.notes : row.notes,
+    };
+    const notifyAt = computeNotifyAt(row.kind, next.fire_at, next.remind_min, next.all_day === 1);
+    let status = row.status;
+    if (status === "fired" && notifyAt && notifyAt > nowIso) status = "pending";
+    if (status === "pending" && row.kind === "event" && !notifyAt) status = "pending"; // silent events stay pending (they're agenda entries)
+    db.prepare(
+      `UPDATE timers SET label=@label, message=@message, zone=@zone, for_person=@for_person, fire_at=@fire_at,
+         title=@title, end_at=@end_at, all_day=@all_day, recurrence=@recurrence, remind_min=@remind_min,
+         notify_at=@notify_at, notes=@notes, status=@status WHERE id=@id`,
+    ).run({ ...next, notify_at: notifyAt, status, id });
+    return this.get(id);
+  }
+
+  /** Pending rows whose announce moment (notify_at) has arrived at `nowIso`. */
   due(nowIso: string): TimerRow[] {
     return dueStmt.all(nowIso) as TimerRow[];
   }
 
-  /** Everything the user would consider "active": pending timers + running stopwatches. */
+  /** Everything the user would consider an "active timer": pending timers/reminders + running stopwatches. */
   active(): TimerRow[] {
     return [...(activeTimersStmt.all() as TimerRow[]), ...(runningStmt.all() as TimerRow[])];
+  }
+
+  /** All agenda rows (events + reminders; pending or fired, never cancelled) for occurrence expansion. */
+  agendaRows(): TimerRow[] {
+    return agendaRowsStmt.all() as TimerRow[];
   }
 
   markFired(id: string): void {
     setStatusStmt.run("fired", id);
   }
 
+  /** Re-arm a recurring row onto its next occurrence (status back to pending). */
+  advance(id: string, fireAt: string, endAt: string | null): void {
+    const row = this.get(id);
+    if (!row) return;
+    advanceStmt.run({
+      id,
+      fire_at: fireAt,
+      end_at: endAt,
+      notify_at: computeNotifyAt(row.kind, fireAt, row.remind_min, row.all_day === 1),
+    });
+  }
+
   /** Cancel a pending timer/reminder (no-op message). Returns the row if one was cancelled. */
   cancel(id: string): TimerRow | undefined {
     const row = this.get(id);
     if (!row || (row.status !== "pending" && row.status !== "running")) return undefined;
+    setStatusStmt.run("cancelled", id);
+    return this.get(id);
+  }
+
+  /** Remove an agenda entry whatever its status (a fired one-shot still shows in the past). */
+  remove(id: string): TimerRow | undefined {
+    const row = this.get(id);
+    if (!row || row.kind === "stopwatch" || row.status === "cancelled") return undefined;
     setStatusStmt.run("cancelled", id);
     return this.get(id);
   }

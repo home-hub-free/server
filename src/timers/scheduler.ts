@@ -2,6 +2,9 @@ import { TimersRepo, TimerRow } from "../db/timers.repo";
 import { liveRooms } from "../ambient/live-rooms";
 import type { RoomDigest } from "../ambient/room-digest";
 import { log, EVENT_TYPES } from "../logger";
+import { nextOccurrence, parseRecurrence } from "./recurrence";
+import { eventAnnouncement } from "./agenda";
+import { notifyAgendaChanged } from "./agenda-events";
 
 /**
  * Timer scheduler — the always-on driver behind user timers/reminders.
@@ -83,18 +86,40 @@ export function fireDue(
       ? planDelivery(t, getRooms(), now)
       : { action: "announce", zone: t.zone };
     if (plan.action === "hold") continue; // leave pending; the next tick re-checks reachability
-    if (t.message) {
+    // LOCAL_AGENDA: an event with no explicit message speaks its deterministic reminder line.
+    const line = t.message ?? (t.kind === "event" ? eventAnnouncement(t, now) : null);
+    if (line) {
       try {
-        if (plan.action === "announce") announce(t.message, plan.zone);
-        else quietSurface(t); // undeliverable personal line → quiet surface, never broadcast
+        if (plan.action === "announce") announce(line, plan.zone);
+        else quietSurface({ ...t, message: line }); // undeliverable personal line → quiet surface, never broadcast
       } catch {
         // A failing speaker/surface must not wedge the tick or re-fire the timer.
       }
     }
-    repo.markFired(t.id);
+    // A recurring row re-arms onto its next occurrence instead of retiring (LOCAL_AGENDA).
+    const advanced = advanceRecurring(t, now, repo);
+    if (!advanced) repo.markFired(t.id);
     fired.push(t);
   }
+  if (fired.length) notifyAgendaChanged({ reason: "fire" });
   return fired;
+}
+
+/** Move a recurring row to its next occurrence after `now` (preserving the event's duration). Returns
+ *  false for a one-shot (or a rule that can't advance), so the caller retires it. */
+function advanceRecurring(t: TimerRow, now: Date, repo: TimersRepo): boolean {
+  const rule = parseRecurrence(t.recurrence);
+  if (!rule || !t.fire_at) return false;
+  const anchorMs = Date.parse(t.fire_at);
+  if (Number.isNaN(anchorMs)) return false;
+  // "after" is the later of now and the current occurrence, so an event announced 30 min early
+  // doesn't re-arm onto the same start it just announced.
+  const after = new Date(Math.max(now.getTime(), anchorMs));
+  const next = nextOccurrence(new Date(anchorMs), rule, after);
+  if (!next) return false;
+  const duration = t.end_at ? Math.max(0, Date.parse(t.end_at) - anchorMs) : null;
+  repo.advance(t.id, next.toISOString(), duration == null ? null : new Date(next.getTime() + duration).toISOString());
+  return true;
 }
 
 /** Default quiet surface: a logged note (never spoken). Replace with a dashboard/phone-note store later. */

@@ -1,6 +1,8 @@
 import { Express } from "express";
 import { TimersRepo, TimerRow, elapsedSeconds } from "../db/timers.repo";
 import { resolveFireAt } from "../timers/scheduler";
+import { notifyAgendaChanged } from "../timers/agenda-events";
+import { parseRecurrence } from "../timers/recurrence";
 
 export const TimersDB = new TimersRepo();
 
@@ -22,6 +24,8 @@ function view(row: TimerRow, now: Date) {
     message: row.message,
     zone: row.zone,
     status: row.status,
+    for_person: row.for_person,
+    recurrence: row.recurrence,
   };
   if (row.kind === "stopwatch") {
     return { ...base, elapsed_seconds: elapsedSeconds(row, now.toISOString()) };
@@ -33,15 +37,20 @@ function view(row: TimerRow, now: Date) {
 }
 
 export function initTimerRoutes(app: Express) {
-  // Create a timer or reminder. Body: { message, minutes? | seconds? | at?, label?, zone?, kind? }.
+  // Create a timer or reminder. Body: { message, minutes? | seconds? | at?, label?, zone?, kind?, for_person?,
+  // recurrence? } — `recurrence` (LOCAL_AGENDA: 'daily'|'weekdays'|'weekly[:d,d]'|'monthly'|'yearly') makes a
+  // reminder re-arm after it fires; a reminder is also an agenda entry (GET /agenda).
   app.post("/timers", (req, res) => {
-    const { message, minutes, seconds, at, label, zone, kind, for_person, forPerson } = req.body ?? {};
+    const { message, minutes, seconds, at, label, zone, kind, for_person, forPerson, recurrence } = req.body ?? {};
     if (!message || typeof message !== "string") {
       return res.status(400).send({ ok: false, error: "message is required" });
     }
     const fireAt = resolveFireAt(new Date(), { minutes, seconds, at });
     if (!fireAt) {
       return res.status(400).send({ ok: false, error: "need minutes, seconds, or a valid 'at' time" });
+    }
+    if (recurrence != null && recurrence !== "" && parseRecurrence(String(recurrence)) === undefined) {
+      return res.status(400).send({ ok: false, error: "invalid recurrence" });
     }
     const row = TimersDB.create({
       kind: kind === "reminder" ? "reminder" : "timer",
@@ -51,7 +60,10 @@ export function initTimerRoutes(app: Express) {
       // Person-targeted reminder (PLAN §3.5): id or name; delivery zone is late-bound at fire time.
       forPerson: forPerson ?? for_person ?? null,
       fireAt,
+      recurrence: recurrence ? String(recurrence) : null,
+      createdBy: (req as any).user?.id ?? null,
     });
+    if (row.kind === "reminder") notifyAgendaChanged({ reason: "create", id: row.id });
     res.send({ ok: true, timer: view(row, new Date()) });
   });
 
@@ -66,6 +78,7 @@ export function initTimerRoutes(app: Express) {
     const { id } = req.body ?? {};
     const row = id ? TimersDB.cancel(String(id)) : undefined;
     if (!row) return res.status(404).send({ ok: false, error: "no active timer with that id" });
+    if (row.kind === "reminder" || row.kind === "event") notifyAgendaChanged({ reason: "cancel", id: row.id });
     res.send({ ok: true, timer: view(row, new Date()) });
   });
 
