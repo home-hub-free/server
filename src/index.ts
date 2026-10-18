@@ -23,6 +23,7 @@ import { initWebSockets } from "./handlers/websockets.handler";
 import { initVAssistantRoutes } from "./routes/v-assistant-routes";
 import { initWeatherRoutes } from "./routes/weather-routes";
 import { initPlacesRoutes } from "./routes/places-routes";
+import { initGuestsRoutes } from "./routes/guests-routes";
 import { initEffectsRoutes, setOnEffectsChanged } from "./routes/effects-routes";
 import { initZonesRoutes } from "./routes/zones-routes";
 import { startPresencePower } from "./automation/presence-power";
@@ -82,6 +83,8 @@ initIngestion();
 
 initAuthRoutes(app);
 initSensorRoutes(app);
+// Guest registry (people who are not members + their relationship to each member).
+initGuestsRoutes(app);
 initDeviceRoutes(app);
 initEffectsRoutes(app);
 // Wire the Node automation hook now that the registry + effects store exist.

@@ -5,6 +5,8 @@ export { DevicesRepo } from "./devices.repo";
 export { SensorsRepo } from "./sensors.repo";
 export { EffectsRepo, IEffect } from "./effects.repo";
 export { ConfigRepo } from "./config.repo";
+export { GuestsRepo, guestsRepo } from "./guests.repo";
+export type { Guest, GuestRelation, Treatment } from "./guests.repo";
 export { TimersRepo, elapsedSeconds } from "./timers.repo";
 export type { TimerRow, TimerKind, TimerStatus, CreateTimerInput } from "./timers.repo";
 

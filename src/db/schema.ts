@@ -140,6 +140,30 @@ export function applySchema(db: DatabaseType.Database): void {
   // The `effects` trigger index targets a dynamic-shape column (`trigger_node`).
   // applySchema runs eagerly at connection-open, *before* migrate.ts has a chance
   // to rebuild a legacy `effects` table (the `CREATE TABLE IF NOT EXISTS` above is
+    -- Guests: people who are NOT household members but whom the house may need to
+    -- address (a parent visiting, a neighbour, a friend of a member). One row per
+    -- person; aliases is a JSON array of other names they go by. treatment is
+    -- how the house should speak to them ('tu' | 'usted' | '' = unspecified).
+    -- The relationship to each member lives in guest_relations ("Lupita is
+    -- david's mamá", "Lupita is ana's suegra") — generic free text per pair.
+    -- Writes come from the dashboard (Settings → Household) or from reflex by
+    -- voice (service token); both go through the same /guests routes.
+    CREATE TABLE IF NOT EXISTS guests (
+      id            TEXT PRIMARY KEY,           -- slug of the name, e.g. 'lupita'
+      name          TEXT NOT NULL,              -- display name, as the house says it
+      aliases       TEXT NOT NULL DEFAULT '[]', -- JSON string[]
+      treatment     TEXT NOT NULL DEFAULT '',   -- 'tu' | 'usted' | ''
+      notes         TEXT NOT NULL DEFAULT '',
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS guest_relations (
+      guest_id   TEXT NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+      member_id  TEXT NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+      relation   TEXT NOT NULL,                 -- free text, guest's role to the member: 'mamá', 'vecino', 'amiga'
+      PRIMARY KEY (guest_id, member_id)
+    );
+
   // a no-op when an older table already exists). Creating this index against a
   // legacy table would throw `no such column: trigger_node` and crash the process
   // at import, so guard it: only create it once the table actually has the column.
@@ -149,6 +173,7 @@ export function applySchema(db: DatabaseType.Database): void {
   if (effectsCols.some((c) => c.name === "trigger_node")) {
     db.exec("CREATE INDEX IF NOT EXISTS idx_effects_trigger ON effects(trigger_node);");
   }
+    CREATE INDEX IF NOT EXISTS idx_guest_relations_member ON guest_relations(member_id);
 
   // Additive column for person-targeted reminders (PERCEPTION_TO_AGENT_PLAN §3.5). The CREATE above
   // already carries it on a fresh DB; ALTER it onto an existing timers table (idempotent — guard on the
