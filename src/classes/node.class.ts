@@ -158,7 +158,7 @@ export class Node {
     this.channels = channelSchema(this.category) ?? [];
     this.operationalRanges = operationalRanges || [];
     this.value = this.initialValue();
-    if (ip) this.ip = pullIp(ip);
+    if (ip) this.ip = simDeviceAddress(id) ?? pullIp(ip);
 
     this.mergeDBData();
 
@@ -308,7 +308,8 @@ export class Node {
     // so the optimistic commit STICKS. Without this, every sim write reverted on the failed device
     // GET, and a later /state read-back served the PRE-write value (surfaced by reflex corpus C118:
     // a relative delta read a stale base). Prod never sets HUB_SIM.
-    if (process.env.HUB_SIM) {
+    // With HUB_SIM_DEVICES set the sim has an emulated fleet (sim/emulator.py), so the round-trip is real.
+    if (process.env.HUB_SIM && !process.env.HUB_SIM_DEVICES) {
       result = Promise.resolve(true);
     } else if (!this.channelAware) {
       result = axios
@@ -649,6 +650,15 @@ export class NodeBlinds extends Node {
   switchDirection() {
     return this.blindsAction("/switch-direction", "Blinds Switch direction");
   }
+}
+
+/** House sim (docs/plans/HOUSE_SIM.md): under HUB_SIM, HUB_SIM_DEVICES names the device emulator
+ * (e.g. http://127.0.0.1:8156) and every node is reached at `<emulator>/d/<id>` instead of the
+ * address it declared from. Undefined outside the sim, so prod addressing is untouched. */
+export function simDeviceAddress(id: string): string | undefined {
+  const base = process.env.HUB_SIM ? process.env.HUB_SIM_DEVICES : undefined;
+  if (!base) return undefined;
+  return `${base.replace(/^https?:\/\//, "").replace(/\/+$/, "")}/d/${encodeURIComponent(id)}`;
 }
 
 function pullIp(address: string): string {

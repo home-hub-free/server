@@ -1,6 +1,6 @@
 import { Request } from "express";
 import { log, EVENT_TYPES } from "../logger";
-import { Node, NodeBlinds, NodeCategory, PRECISION_CATEGORIES } from "../classes/node.class";
+import { Node, NodeBlinds, NodeCategory, PRECISION_CATEGORIES, simDeviceAddress } from "../classes/node.class";
 import { isObjectBlobCategory, reconcileValueWrite, toBoolean } from "../clients/channels";
 import { NodesRepo } from "../db/nodes.repo";
 import { computeCoolerUpdates } from "../automation/cooler-controller";
@@ -34,7 +34,7 @@ export function pullIpFromAddress(address: Request["ip"]): string {
 export function assignNodeIp(id: string, address: string): void {
   const node = findNode(id);
   if (!node) return;
-  const ip = pullIpFromAddress(address);
+  const ip = simDeviceAddress(id) ?? pullIpFromAddress(address);
 
   if (!node.ip) {
     node.ip = ip;
