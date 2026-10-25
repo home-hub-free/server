@@ -1,5 +1,5 @@
 import { Express } from "express";
-import { TimersRepo, TimerRow, elapsedSeconds } from "../db/timers.repo";
+import { TimersRepo, TimerRow, TimerAction, elapsedSeconds, actionsOf } from "../db/timers.repo";
 import { resolveFireAt } from "../timers/scheduler";
 import { notifyAgendaChanged } from "../timers/agenda-events";
 import { parseRecurrence } from "../timers/recurrence";
@@ -26,6 +26,7 @@ function view(row: TimerRow, now: Date) {
     status: row.status,
     for_person: row.for_person,
     recurrence: row.recurrence,
+    action: actionsOf(row),
   };
   if (row.kind === "stopwatch") {
     return { ...base, elapsed_seconds: elapsedSeconds(row, now.toISOString()) };
@@ -41,8 +42,16 @@ export function initTimerRoutes(app: Express) {
   // recurrence? } — `recurrence` (LOCAL_AGENDA: 'daily'|'weekdays'|'weekly[:d,d]'|'monthly'|'yearly') makes a
   // reminder re-arm after it fires; a reminder is also an agenda entry (GET /agenda).
   app.post("/timers", (req, res) => {
-    const { message, minutes, seconds, at, label, zone, kind, for_person, forPerson, recurrence } = req.body ?? {};
-    if (!message || typeof message !== "string") {
+    const { message, minutes, seconds, at, label, zone, kind, for_person, forPerson, recurrence, action } = req.body ?? {};
+    // Deferred device command (2026-10-25): `action` = [{id, value, channel?}] executed at fire time; then the
+    // spoken `message` is optional (a silent deferred command is fine).
+    const actions: TimerAction[] | null = Array.isArray(action)
+      ? action.filter((a: unknown): a is TimerAction => !!a && typeof (a as TimerAction).id === "string" && "value" in (a as object))
+      : null;
+    if (Array.isArray(action) && (!actions || actions.length !== action.length)) {
+      return res.status(400).send({ ok: false, error: "each action needs {id, value, channel?}" });
+    }
+    if ((!message || typeof message !== "string") && !(actions && actions.length)) {
       return res.status(400).send({ ok: false, error: "message is required" });
     }
     const fireAt = resolveFireAt(new Date(), { minutes, seconds, at });
@@ -54,9 +63,10 @@ export function initTimerRoutes(app: Express) {
     }
     const row = TimersDB.create({
       kind: kind === "reminder" ? "reminder" : "timer",
-      message,
+      message: typeof message === "string" && message ? message : null,
       label: label ?? null,
       zone: zone ?? null,
+      action: actions,
       // Person-targeted reminder (PLAN §3.5): id or name; delivery zone is late-bound at fire time.
       forPerson: forPerson ?? for_person ?? null,
       fireAt,

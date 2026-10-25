@@ -1,4 +1,4 @@
-import { TimersRepo, TimerRow } from "../db/timers.repo";
+import { TimersRepo, TimerRow, TimerAction, actionsOf } from "../db/timers.repo";
 import { liveRooms } from "../ambient/live-rooms";
 import type { RoomDigest } from "../ambient/room-digest";
 import { log, EVENT_TYPES } from "../logger";
@@ -28,6 +28,8 @@ export type Announce = (text: string, zone?: string | null) => void;
  *  dashboard/phone-note store can replace it). The contract is "never speak it to the wrong room / an
  *  empty house". */
 export type QuietSurface = (timer: TimerRow) => void;
+/** Performs one deferred device write when its row fires; injectable for tests. */
+export type Actuate = (action: TimerAction, timer: TimerRow) => void;
 
 // How long a person-targeted reminder is HELD waiting for its target to become reachable before it falls
 // back to the quiet surface. Bounded so a reminder for someone who never comes home doesn't linger forever.
@@ -74,9 +76,10 @@ export function fireDue(
   now: Date,
   announce: Announce,
   repo: TimersRepo = sharedRepo,
-  opts: { rooms?: Record<string, RoomDigest>; quietSurface?: QuietSurface } = {},
+  opts: { rooms?: Record<string, RoomDigest>; quietSurface?: QuietSurface; actuate?: Actuate } = {},
 ): TimerRow[] {
   const quietSurface = opts.quietSurface ?? defaultQuietSurface;
+  const actuate = opts.actuate ?? defaultActuate;
   let rooms = opts.rooms; // resolved lazily — only person-targeted reminders need the world-model
   const getRooms = (): Record<string, RoomDigest> => (rooms ??= liveRooms(now.getTime()));
 
@@ -86,6 +89,14 @@ export function fireDue(
       ? planDelivery(t, getRooms(), now)
       : { action: "announce", zone: t.zone };
     if (plan.action === "hold") continue; // leave pending; the next tick re-checks reachability
+    // A deferred command («apaga la luz en diez minutos») performs its device writes now, each one isolated.
+    for (const a of actionsOf(t)) {
+      try {
+        actuate(a, t);
+      } catch (e) {
+        log(EVENT_TYPES.error, [`Timer ${t.id}: action on ${a.id} failed: ${(e as Error)?.message ?? e}`]);
+      }
+    }
     // LOCAL_AGENDA: an event with no explicit message speaks its deterministic reminder line.
     const line = t.message ?? (t.kind === "event" ? eventAnnouncement(t, now) : null);
     if (line) {
@@ -189,6 +200,24 @@ export function stopTimers(): void {
 /** Speak through the hub's announcement sink — lazily required so tests/CLIs needn't load Polly. Honors
  *  the `zone` (today it routes to that zone's satellite when one is configured, else the box — see
  *  v-assistant say()); previously the zone was dropped here. */
+/** Real write: the same door as a spoken command relayed by the gateway — bypasses + latches the manual
+ *  lock (a human asked for it, just earlier); a `setting` channel stays a setpoint (decideWritePolicy). */
+function defaultActuate(a: TimerAction, t: TimerRow): void {
+  const { findNode } = require("../handlers/node.handler");
+  const { decideWritePolicy } = require("../routes/device-write-policy");
+  const node = findNode(a.id);
+  if (!node) {
+    log(EVENT_TYPES.error, [`Timer ${t.id}: device ${a.id} not found`]);
+    return;
+  }
+  const channelRole = a.channel != null ? (node.channels ?? []).find((c: { key: string }) => c.key === a.channel)?.role : undefined;
+  const { latch } = decideWritePolicy({ source: "voice", onBehalfOf: "user", nodeManual: node.manual, channelRole });
+  const write: Promise<unknown> =
+    a.channel != null ? node.setChannel(a.channel, a.value, "voice", latch) : node.manualTrigger(a.value, "voice", undefined, latch);
+  write.catch(() => {});
+  log(EVENT_TYPES.info, [`Timer ${t.id} fired: ${node.name} ${a.channel ? a.channel + "=" : ""}${JSON.stringify(a.value)}`]);
+}
+
 function defaultAnnounce(text: string, zone?: string | null): void {
   // Lazy import: pulling the assistant singleton at module load would drag in play-sound/Polly.
   const { assistant } = require("../v-assistant/v-assistant.class");

@@ -115,6 +115,7 @@ export function applySchema(db: DatabaseType.Database): void {
       notify_at   TEXT,
       notes       TEXT,
       created_by  TEXT,
+      action      TEXT,                     -- JSON [{id, value, channel?}]: device writes executed when the row fires (deferred commands)
       started_at  TEXT NOT NULL DEFAULT (datetime('now')),  -- creation / stopwatch start
       stopped_at  TEXT,                     -- stopwatch stop time
       status      TEXT NOT NULL DEFAULT 'pending', -- pending | fired | cancelled | running | stopped
@@ -200,6 +201,7 @@ export function applySchema(db: DatabaseType.Database): void {
   const agendaCols: Array<[string, string]> = [
     ["title", "TEXT"], ["end_at", "TEXT"], ["all_day", "INTEGER NOT NULL DEFAULT 0"], ["recurrence", "TEXT"],
     ["remind_min", "INTEGER"], ["notify_at", "TEXT"], ["notes", "TEXT"], ["created_by", "TEXT"],
+    ["action", "TEXT"], // deferred device commands (2026-10-25): «apaga la luz en diez minutos»
   ];
   for (const [name, type] of agendaCols) {
     if (!timerCols.some((c) => c.name === name)) db.exec(`ALTER TABLE timers ADD COLUMN ${name} ${type};`);

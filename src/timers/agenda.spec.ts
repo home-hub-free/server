@@ -5,7 +5,7 @@ import type { TimerRow } from "../db/timers.repo";
 const row = (o: Partial<TimerRow>): TimerRow => ({
   id: "r1", kind: "event", label: null, message: null, zone: null, for_person: null, fire_at: null, started_at: "x",
   stopped_at: null, status: "pending", created_at: "x", title: "Dentista", end_at: null, all_day: 0, recurrence: null,
-  remind_min: 15, notify_at: null, notes: null, created_by: null, ...o,
+  remind_min: 15, notify_at: null, notes: null, created_by: null, action: null, ...o,
 });
 const L = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
 

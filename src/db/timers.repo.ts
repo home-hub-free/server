@@ -21,6 +21,26 @@ import { parseRecurrence } from "../timers/recurrence";
  * the tick. That keeps the firing logic unit-testable with a fake clock.
  */
 export type TimerKind = "timer" | "reminder" | "event" | "stopwatch";
+
+/** A device write the scheduler performs when the row fires — a deferred spoken command («apaga la luz de la
+ *  cocina en diez minutos»). Executed through the same write policy as a live user command (bypasses + latches
+ *  the manual lock; a `setting` channel is a setpoint). */
+export interface TimerAction {
+  id: string;
+  value: unknown;
+  channel?: string;
+}
+
+/** Parse the row's JSON `action` column; [] when none / unparsable. */
+export function actionsOf(row: { action?: string | null }): TimerAction[] {
+  if (!row.action) return [];
+  try {
+    const v = JSON.parse(row.action);
+    return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 export type TimerStatus = "pending" | "fired" | "cancelled" | "running" | "stopped";
 
 export interface TimerRow {
@@ -48,6 +68,8 @@ export interface TimerRow {
   notify_at: string | null;
   notes: string | null;
   created_by: string | null;
+  /** JSON-encoded TimerAction[]; null for a plain announcement. */
+  action: string | null;
 }
 
 export interface CreateTimerInput {
@@ -67,6 +89,8 @@ export interface CreateTimerInput {
   remindMin?: number | null;
   notes?: string | null;
   createdBy?: string | null;
+  /** Device writes performed at fire time (deferred command). */
+  action?: TimerAction[] | null;
 }
 
 /** The editable subset for PATCH (agenda-routes). `null` clears a nullable field. */
@@ -86,9 +110,9 @@ export interface UpdateTimerInput {
 
 const insertStmt = db.prepare(
   `INSERT INTO timers (id, kind, label, message, zone, for_person, fire_at, status,
-                       title, end_at, all_day, recurrence, remind_min, notify_at, notes, created_by)
+                       title, end_at, all_day, recurrence, remind_min, notify_at, notes, created_by, action)
    VALUES (@id, @kind, @label, @message, @zone, @for_person, @fire_at, @status,
-           @title, @end_at, @all_day, @recurrence, @remind_min, @notify_at, @notes, @created_by)`,
+           @title, @end_at, @all_day, @recurrence, @remind_min, @notify_at, @notes, @created_by, @action)`,
 );
 const getStmt = db.prepare("SELECT * FROM timers WHERE id = ?");
 const dueStmt = db.prepare(
@@ -184,6 +208,7 @@ export class TimersRepo {
       notify_at: computeNotifyAt(input.kind, fireAt, remindMin, allDay),
       notes: input.notes ?? null,
       created_by: input.createdBy ?? null,
+      action: input.action && input.action.length ? JSON.stringify(input.action) : null,
     });
     return this.get(id)!;
   }

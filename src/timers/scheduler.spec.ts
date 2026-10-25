@@ -10,7 +10,7 @@ const room = (zone: string, people: RoomDigest["people"]): RoomDigest =>
   ({ zone, occupied: true, count: people!.length, people, source: ["vision"], observedAt: "x" });
 const rowOf = (o: Partial<TimerRow>): TimerRow =>
   ({ id: "t", kind: "reminder", label: null, message: "m", zone: null, for_person: null, fire_at: null, started_at: "x", stopped_at: null, status: "pending", created_at: "x",
-     title: null, end_at: null, all_day: 0, recurrence: null, remind_min: 0, notify_at: null, notes: null, created_by: null, ...o });
+     title: null, end_at: null, all_day: 0, recurrence: null, remind_min: 0, notify_at: null, notes: null, created_by: null, action: null, ...o });
 
 describe("fireDue", () => {
   it("announces each due timer's message exactly once, then marks it fired", () => {
@@ -131,5 +131,38 @@ describe("resolveFireAt", () => {
     expect(resolveFireAt(now, { at: "luego" })).toBeNull();
     expect(resolveFireAt(now, { at: "99:99" })).toBeNull();
     expect(resolveFireAt(now, {})).toBeNull();
+  });
+});
+
+
+describe("deferred device commands (timer.action)", () => {
+  it("performs each action through the injected actuate sink, once, and still retires the row", () => {
+    const done: Array<{ id: string; value: unknown; channel?: string }> = [];
+    const spoken: string[] = [];
+    const row = repo.create({ kind: "timer", message: null, fireAt: new Date(Date.now() - 1000).toISOString(),
+      action: [{ id: "luz-cocina", value: 0 }, { id: "cafetera", value: false, channel: "power" }] });
+    const fired = fireDue(new Date(), (t) => spoken.push(t), repo, { actuate: (a) => done.push(a) });
+    expect(fired.map((t) => t.id)).toEqual([row.id]);
+    expect(done).toEqual([{ id: "luz-cocina", value: 0 }, { id: "cafetera", value: false, channel: "power" }]);
+    expect(spoken).toEqual([]); // silent deferred command: nothing announced
+    expect(repo.get(row.id)!.status).toBe("fired");
+    fireDue(new Date(), (t) => spoken.push(t), repo, { actuate: (a) => done.push(a) });
+    expect(done).toHaveLength(2);
+  });
+
+  it("an actuate failure on one device neither wedges the tick nor skips the message", () => {
+    const spoken: string[] = [];
+    const row = repo.create({ kind: "timer", message: "listo", fireAt: new Date(Date.now() - 1000).toISOString(),
+      action: [{ id: "bad", value: true }] });
+    expect(() => fireDue(new Date(), (t) => spoken.push(t), repo, { actuate: () => { throw new Error("no such node"); } })).not.toThrow();
+    expect(spoken).toEqual(["listo"]);
+    expect(repo.get(row.id)!.status).toBe("fired");
+  });
+
+  it("round-trips the action column through the repo", () => {
+    const row = repo.create({ kind: "timer", message: "x", fireAt: new Date(Date.now() + 60_000).toISOString(), action: [{ id: "a", value: 50 }] });
+    expect(JSON.parse(repo.get(row.id)!.action!)).toEqual([{ id: "a", value: 50 }]);
+    const plain = repo.create({ kind: "timer", message: "y", fireAt: new Date(Date.now() + 60_000).toISOString() });
+    expect(repo.get(plain.id)!.action).toBeNull();
   });
 });
